@@ -1,0 +1,148 @@
+syntax = "proto3";
+
+package user.v1;
+
+option go_package = "github.com/tiehu-ai/tiehu-fitness/api/user/v1;userv1";
+
+import "google/api/annotations.proto";
+
+service UserService {
+  rpc WechatLogin(WechatLoginRequest) returns (WechatLoginResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/wechat/login"
+      body: "*"
+    };
+  }
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/token:refresh"
+      body: "*"
+    };
+  }
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/logout"
+      body: "*"
+    };
+  }
+  rpc GetFitnessProfile(GetFitnessProfileRequest) returns (GetFitnessProfileResponse) {
+    option (google.api.http) = {get: "/v1/users/{user_id}/fitness-profile"};
+  }
+  rpc UpdateFitnessProfile(UpdateFitnessProfileRequest) returns (UpdateFitnessProfileResponse) {
+    option (google.api.http) = {
+      put: "/v1/users/{profile.user_id}/fitness-profile"
+      body: "profile"
+    };
+  }
+  rpc GenerateWorkoutPlan(GenerateWorkoutPlanRequest) returns (GenerateWorkoutPlanResponse) {
+    option (google.api.http) = {
+      post: "/v1/users/{user_id}/workout-plans:generate"
+      body: "*"
+    };
+  }
+  rpc GetWorkoutPlan(GetWorkoutPlanRequest) returns (GetWorkoutPlanResponse) {
+    option (google.api.http) = {get: "/v1/users/{user_id}/workout-plans/{plan_id}"};
+  }
+  rpc CheckIn(CheckInRequest) returns (CheckInResponse) {
+    option (google.api.http) = {
+      post: "/v1/users/{user_id}/check-ins"
+      body: "*"
+    };
+  }
+}
+
+message WechatLoginRequest {
+  string code = 1;
+  string device_id = 2;
+}
+
+message WechatLoginResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in_seconds = 3;
+  User user = 4;
+  bool is_new_user = 5;
+  bool onboarding_required = 6;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in_seconds = 3;
+}
+
+message LogoutRequest {
+  string refresh_token = 1;
+}
+
+message LogoutResponse {}
+
+message User {
+  string user_id = 1;
+  string nickname = 2;
+  string avatar_uri = 3;
+  string status = 4;
+}
+
+message FitnessProfile {
+  string user_id = 1;
+  string goal = 2;
+  string experience_level = 3;
+  int32 days_per_week = 4;
+  int32 duration_minutes = 5;
+  repeated string available_equipment_codes = 6;
+  repeated string injury_notes = 7;
+  bool onboarding_completed = 8;
+}
+
+message GetFitnessProfileRequest {
+  string user_id = 1;
+}
+
+message GetFitnessProfileResponse {
+  FitnessProfile profile = 1;
+}
+
+message UpdateFitnessProfileRequest {
+  FitnessProfile profile = 1;
+}
+
+message UpdateFitnessProfileResponse {
+  FitnessProfile profile = 1;
+}
+
+message GenerateWorkoutPlanRequest {
+  string user_id = 1;
+}
+
+message WorkoutPlan {
+  string plan_id = 1;
+  string user_id = 2;
+  string goal = 3;
+  string status = 4;
+}
+
+message GenerateWorkoutPlanResponse {
+  WorkoutPlan plan = 1;
+}
+
+message GetWorkoutPlanRequest {
+  string user_id = 1;
+  string plan_id = 2;
+}
+
+message GetWorkoutPlanResponse {
+  WorkoutPlan plan = 1;
+}
+
+message CheckInRequest {
+  string user_id = 1;
+}
+
+message CheckInResponse {
+  int32 current_streak_days = 1;
+}

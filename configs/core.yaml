@@ -1,0 +1,13 @@
+server:
+  http:
+    addr: 0.0.0.0:8000
+    timeout: 5s
+  grpc:
+    addr: 0.0.0.0:9000
+    timeout: 5s
+wechat:
+  app_id: ${WECHAT_APP_ID:}
+  app_secret: ${WECHAT_APP_SECRET:}
+auth:
+  access_token_ttl: 7200s
+  refresh_token_ttl: 2592000s

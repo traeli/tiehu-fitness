@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package vision.v1;
+
+option go_package = "github.com/tiehu-ai/tiehu-fitness/api/vision/v1;visionv1";
+
+import "google/api/annotations.proto";
+
+service VisionService {
+  rpc RecognizeEquipment(RecognizeEquipmentRequest) returns (RecognizeEquipmentResponse) {
+    option (google.api.http) = {
+      post: "/v1/vision/equipment:recognize"
+      body: "*"
+    };
+  }
+  rpc AnalyzePosture(AnalyzePostureRequest) returns (AnalyzePostureResponse) {
+    option (google.api.http) = {
+      post: "/v1/vision/posture:analyze"
+      body: "*"
+    };
+  }
+  rpc GetAnalysisJob(GetAnalysisJobRequest) returns (GetAnalysisJobResponse) {
+    option (google.api.http) = {get: "/v1/vision/jobs/{job_id}"};
+  }
+}
+
+enum AnalysisType {
+  ANALYSIS_TYPE_UNSPECIFIED = 0;
+  ANALYSIS_TYPE_EQUIPMENT = 1;
+  ANALYSIS_TYPE_POSTURE = 2;
+}
+
+enum AnalysisStatus {
+  ANALYSIS_STATUS_UNSPECIFIED = 0;
+  ANALYSIS_STATUS_PENDING = 1;
+  ANALYSIS_STATUS_PROCESSING = 2;
+  ANALYSIS_STATUS_SUCCEEDED = 3;
+  ANALYSIS_STATUS_FAILED = 4;
+}
+
+message RecognizeEquipmentRequest {
+  string image_uri = 1;
+  string user_id = 2;
+}
+
+message AnalyzePostureRequest {
+  string video_uri = 1;
+  string exercise_code = 2;
+  string user_id = 3;
+}
+
+message GetAnalysisJobRequest {
+  string job_id = 1;
+}
+
+message RecognizeEquipmentResponse {
+  AnalysisJob job = 1;
+}
+
+message AnalyzePostureResponse {
+  AnalysisJob job = 1;
+}
+
+message GetAnalysisJobResponse {
+  AnalysisJob job = 1;
+}
+
+message AnalysisJob {
+  string job_id = 1;
+  AnalysisType type = 2;
+  AnalysisStatus status = 3;
+  string media_uri = 4;
+  string result_json = 5;
+  string error_message = 6;
+}

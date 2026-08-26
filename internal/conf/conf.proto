@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package conf;
+
+option go_package = "github.com/tiehu-ai/tiehu-fitness/internal/conf;conf";
+
+import "google/protobuf/duration.proto";
+
+message Bootstrap {
+  Server server = 1;
+  Wechat wechat = 2;
+  Auth auth = 3;
+}
+
+message Wechat {
+  string app_id = 1;
+  string app_secret = 2;
+}
+
+message Auth {
+  google.protobuf.Duration access_token_ttl = 1;
+  google.protobuf.Duration refresh_token_ttl = 2;
+}
+
+message Server {
+  message HTTP {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  message GRPC {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  HTTP http = 1;
+  GRPC grpc = 2;
+}

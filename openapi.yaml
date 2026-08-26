@@ -1,0 +1,521 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: ""
+    version: 0.0.1
+paths:
+    /v1/auth/logout:
+        post:
+            tags:
+                - UserService
+            operationId: UserService_Logout
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/user.v1.LogoutRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.LogoutResponse'
+    /v1/auth/token:refresh:
+        post:
+            tags:
+                - UserService
+            operationId: UserService_RefreshToken
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/user.v1.RefreshTokenRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.RefreshTokenResponse'
+    /v1/auth/wechat/login:
+        post:
+            tags:
+                - UserService
+            operationId: UserService_WechatLogin
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/user.v1.WechatLoginRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.WechatLoginResponse'
+    /v1/equipment/{equipmentCode}:
+        get:
+            tags:
+                - ContentService
+            operationId: ContentService_GetEquipment
+            parameters:
+                - name: equipmentCode
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/content.v1.GetEquipmentResponse'
+    /v1/equipment/{equipmentCode}/exercises:
+        get:
+            tags:
+                - ContentService
+            operationId: ContentService_RecommendExercises
+            parameters:
+                - name: equipmentCode
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/content.v1.RecommendExercisesResponse'
+    /v1/exercises/{exerciseCode}:
+        get:
+            tags:
+                - ContentService
+            operationId: ContentService_GetExercise
+            parameters:
+                - name: exerciseCode
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/content.v1.GetExerciseResponse'
+    /v1/users/{profile.user_id}/fitness-profile:
+        put:
+            tags:
+                - UserService
+            operationId: UserService_UpdateFitnessProfile
+            parameters:
+                - name: profile.user_id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/user.v1.FitnessProfile'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.UpdateFitnessProfileResponse'
+    /v1/users/{userId}/check-ins:
+        post:
+            tags:
+                - UserService
+            operationId: UserService_CheckIn
+            parameters:
+                - name: userId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/user.v1.CheckInRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.CheckInResponse'
+    /v1/users/{userId}/fitness-profile:
+        get:
+            tags:
+                - UserService
+            operationId: UserService_GetFitnessProfile
+            parameters:
+                - name: userId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.GetFitnessProfileResponse'
+    /v1/users/{userId}/workout-plans/{planId}:
+        get:
+            tags:
+                - UserService
+            operationId: UserService_GetWorkoutPlan
+            parameters:
+                - name: userId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: planId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.GetWorkoutPlanResponse'
+    /v1/users/{userId}/workout-plans:generate:
+        post:
+            tags:
+                - UserService
+            operationId: UserService_GenerateWorkoutPlan
+            parameters:
+                - name: userId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/user.v1.GenerateWorkoutPlanRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.GenerateWorkoutPlanResponse'
+    /v1/vision/equipment:recognize:
+        post:
+            tags:
+                - VisionService
+            operationId: VisionService_RecognizeEquipment
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/vision.v1.RecognizeEquipmentRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/vision.v1.RecognizeEquipmentResponse'
+    /v1/vision/jobs/{jobId}:
+        get:
+            tags:
+                - VisionService
+            operationId: VisionService_GetAnalysisJob
+            parameters:
+                - name: jobId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/vision.v1.GetAnalysisJobResponse'
+    /v1/vision/posture:analyze:
+        post:
+            tags:
+                - VisionService
+            operationId: VisionService_AnalyzePosture
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/vision.v1.AnalyzePostureRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/vision.v1.AnalyzePostureResponse'
+components:
+    schemas:
+        content.v1.Equipment:
+            type: object
+            properties:
+                equipmentCode:
+                    type: string
+                name:
+                    type: string
+                description:
+                    type: string
+                targetMuscles:
+                    type: array
+                    items:
+                        type: string
+                safetyTips:
+                    type: array
+                    items:
+                        type: string
+        content.v1.Exercise:
+            type: object
+            properties:
+                exerciseCode:
+                    type: string
+                name:
+                    type: string
+                equipmentCode:
+                    type: string
+                instructionVideoUri:
+                    type: string
+                targetMuscles:
+                    type: array
+                    items:
+                        type: string
+                keyPoints:
+                    type: array
+                    items:
+                        type: string
+                commonMistakes:
+                    type: array
+                    items:
+                        type: string
+        content.v1.GetEquipmentResponse:
+            type: object
+            properties:
+                equipment:
+                    $ref: '#/components/schemas/content.v1.Equipment'
+        content.v1.GetExerciseResponse:
+            type: object
+            properties:
+                exercise:
+                    $ref: '#/components/schemas/content.v1.Exercise'
+        content.v1.RecommendExercisesResponse:
+            type: object
+            properties:
+                exercises:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/content.v1.Exercise'
+        user.v1.CheckInRequest:
+            type: object
+            properties:
+                userId:
+                    type: string
+        user.v1.CheckInResponse:
+            type: object
+            properties:
+                currentStreakDays:
+                    type: integer
+                    format: int32
+        user.v1.FitnessProfile:
+            type: object
+            properties:
+                userId:
+                    type: string
+                goal:
+                    type: string
+                experienceLevel:
+                    type: string
+                daysPerWeek:
+                    type: integer
+                    format: int32
+                durationMinutes:
+                    type: integer
+                    format: int32
+                availableEquipmentCodes:
+                    type: array
+                    items:
+                        type: string
+                injuryNotes:
+                    type: array
+                    items:
+                        type: string
+                onboardingCompleted:
+                    type: boolean
+        user.v1.GenerateWorkoutPlanRequest:
+            type: object
+            properties:
+                userId:
+                    type: string
+        user.v1.GenerateWorkoutPlanResponse:
+            type: object
+            properties:
+                plan:
+                    $ref: '#/components/schemas/user.v1.WorkoutPlan'
+        user.v1.GetFitnessProfileResponse:
+            type: object
+            properties:
+                profile:
+                    $ref: '#/components/schemas/user.v1.FitnessProfile'
+        user.v1.GetWorkoutPlanResponse:
+            type: object
+            properties:
+                plan:
+                    $ref: '#/components/schemas/user.v1.WorkoutPlan'
+        user.v1.LogoutRequest:
+            type: object
+            properties:
+                refreshToken:
+                    type: string
+        user.v1.LogoutResponse:
+            type: object
+            properties: {}
+        user.v1.RefreshTokenRequest:
+            type: object
+            properties:
+                refreshToken:
+                    type: string
+        user.v1.RefreshTokenResponse:
+            type: object
+            properties:
+                accessToken:
+                    type: string
+                refreshToken:
+                    type: string
+                expiresInSeconds:
+                    type: string
+        user.v1.UpdateFitnessProfileResponse:
+            type: object
+            properties:
+                profile:
+                    $ref: '#/components/schemas/user.v1.FitnessProfile'
+        user.v1.User:
+            type: object
+            properties:
+                userId:
+                    type: string
+                nickname:
+                    type: string
+                avatarUri:
+                    type: string
+                status:
+                    type: string
+        user.v1.WechatLoginRequest:
+            type: object
+            properties:
+                code:
+                    type: string
+                deviceId:
+                    type: string
+        user.v1.WechatLoginResponse:
+            type: object
+            properties:
+                accessToken:
+                    type: string
+                refreshToken:
+                    type: string
+                expiresInSeconds:
+                    type: string
+                user:
+                    $ref: '#/components/schemas/user.v1.User'
+                isNewUser:
+                    type: boolean
+                onboardingRequired:
+                    type: boolean
+        user.v1.WorkoutPlan:
+            type: object
+            properties:
+                planId:
+                    type: string
+                userId:
+                    type: string
+                goal:
+                    type: string
+                status:
+                    type: string
+        vision.v1.AnalysisJob:
+            type: object
+            properties:
+                jobId:
+                    type: string
+                type:
+                    type: integer
+                    format: enum
+                status:
+                    type: integer
+                    format: enum
+                mediaUri:
+                    type: string
+                resultJson:
+                    type: string
+                errorMessage:
+                    type: string
+        vision.v1.AnalyzePostureRequest:
+            type: object
+            properties:
+                videoUri:
+                    type: string
+                exerciseCode:
+                    type: string
+                userId:
+                    type: string
+        vision.v1.AnalyzePostureResponse:
+            type: object
+            properties:
+                job:
+                    $ref: '#/components/schemas/vision.v1.AnalysisJob'
+        vision.v1.GetAnalysisJobResponse:
+            type: object
+            properties:
+                job:
+                    $ref: '#/components/schemas/vision.v1.AnalysisJob'
+        vision.v1.RecognizeEquipmentRequest:
+            type: object
+            properties:
+                imageUri:
+                    type: string
+                userId:
+                    type: string
+        vision.v1.RecognizeEquipmentResponse:
+            type: object
+            properties:
+                job:
+                    $ref: '#/components/schemas/vision.v1.AnalysisJob'
+tags:
+    - name: ContentService
+    - name: UserService
+    - name: VisionService

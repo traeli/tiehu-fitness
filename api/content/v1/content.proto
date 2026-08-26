@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package content.v1;
+
+option go_package = "github.com/tiehu-ai/tiehu-fitness/api/content/v1;contentv1";
+
+import "google/api/annotations.proto";
+
+service ContentService {
+  rpc GetEquipment(GetEquipmentRequest) returns (GetEquipmentResponse) {
+    option (google.api.http) = {get: "/v1/equipment/{equipment_code}"};
+  }
+  rpc RecommendExercises(RecommendExercisesRequest) returns (RecommendExercisesResponse) {
+    option (google.api.http) = {get: "/v1/equipment/{equipment_code}/exercises"};
+  }
+  rpc GetExercise(GetExerciseRequest) returns (GetExerciseResponse) {
+    option (google.api.http) = {get: "/v1/exercises/{exercise_code}"};
+  }
+}
+
+message Equipment {
+  string equipment_code = 1;
+  string name = 2;
+  string description = 3;
+  repeated string target_muscles = 4;
+  repeated string safety_tips = 5;
+}
+
+message Exercise {
+  string exercise_code = 1;
+  string name = 2;
+  string equipment_code = 3;
+  string instruction_video_uri = 4;
+  repeated string target_muscles = 5;
+  repeated string key_points = 6;
+  repeated string common_mistakes = 7;
+}
+
+message GetEquipmentRequest {
+  string equipment_code = 1;
+}
+
+message GetEquipmentResponse {
+  Equipment equipment = 1;
+}
+
+message RecommendExercisesRequest {
+  string equipment_code = 1;
+}
+
+message RecommendExercisesResponse {
+  repeated Exercise exercises = 1;
+}
+
+message GetExerciseRequest {
+  string exercise_code = 1;
+}
+
+message GetExerciseResponse {
+  Exercise exercise = 1;
+}
