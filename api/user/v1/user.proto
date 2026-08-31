@@ -5,144 +5,304 @@ package user.v1;
 option go_package = "github.com/tiehu-ai/tiehu-fitness/api/user/v1;userv1";
 
 import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 
+// UserService 提供 Web/小程序登录、用户档案、训练计划和打卡能力。
 service UserService {
+  // Register 使用邮箱创建 Web 用户账号并签发登录令牌。
+  rpc Register(RegisterRequest) returns (RegisterResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/register"
+      body: "*"
+    };
+  }
+  // Login 使用邮箱和密码登录 Web 账号。
+  rpc Login(LoginRequest) returns (LoginResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/login"
+      body: "*"
+    };
+  }
+  // WechatLogin 使用 wx.login 返回的临时 code 登录，首次登录会自动注册。
   rpc WechatLogin(WechatLoginRequest) returns (WechatLoginResponse) {
     option (google.api.http) = {
       post: "/v1/auth/wechat/login"
       body: "*"
     };
   }
+  // UToolsLogin 使用 uTools 用户服务端临时令牌登录，首次登录会自动注册。
+  rpc UToolsLogin(UToolsLoginRequest) returns (UToolsLoginResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/utools/login"
+      body: "*"
+    };
+  }
+  // RefreshToken 轮换刷新令牌并签发一组新令牌。
   rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {
     option (google.api.http) = {
       post: "/v1/auth/token:refresh"
       body: "*"
     };
   }
+  // Logout 撤销当前刷新令牌对应的会话。
   rpc Logout(LogoutRequest) returns (LogoutResponse) {
     option (google.api.http) = {
       post: "/v1/auth/logout"
       body: "*"
     };
   }
+  // GetFitnessProfile 查询用户的健身目标和训练偏好。
   rpc GetFitnessProfile(GetFitnessProfileRequest) returns (GetFitnessProfileResponse) {
     option (google.api.http) = {get: "/v1/users/{user_id}/fitness-profile"};
   }
+  // UpdateFitnessProfile 更新用户的健身目标和训练偏好。
   rpc UpdateFitnessProfile(UpdateFitnessProfileRequest) returns (UpdateFitnessProfileResponse) {
     option (google.api.http) = {
-      put: "/v1/users/{profile.user_id}/fitness-profile"
+      put: "/v1/users/{user_id}/fitness-profile"
       body: "profile"
     };
   }
+  // GenerateWorkoutPlan 根据已完成的健身档案生成训练计划。
   rpc GenerateWorkoutPlan(GenerateWorkoutPlanRequest) returns (GenerateWorkoutPlanResponse) {
-    option (google.api.http) = {
-      post: "/v1/users/{user_id}/workout-plans:generate"
-      body: "*"
-    };
+    option (google.api.http) = {post: "/v1/users/{user_id}/workout-plans:generate"};
   }
+  // GetWorkoutPlan 查询指定训练计划。
   rpc GetWorkoutPlan(GetWorkoutPlanRequest) returns (GetWorkoutPlanResponse) {
     option (google.api.http) = {get: "/v1/users/{user_id}/workout-plans/{plan_id}"};
   }
+  // CheckIn 完成当天打卡并返回当前连续打卡天数。
   rpc CheckIn(CheckInRequest) returns (CheckInResponse) {
-    option (google.api.http) = {
-      post: "/v1/users/{user_id}/check-ins"
-      body: "*"
-    };
+    option (google.api.http) = {post: "/v1/users/{user_id}/check-ins"};
   }
 }
 
+// Web 用户注册参数。
+message RegisterRequest {
+  // 登录邮箱；忽略首尾空格和大小写，必须是完整的公网邮箱地址。
+  string email = 1 [(google.api.field_behavior) = REQUIRED];
+  // 登录密码，长度为 8 到 72 字节。
+  string password = 2 [(google.api.field_behavior) = REQUIRED];
+  // 用户展示昵称；为空时使用邮箱 @ 前的本地部分。
+  string nickname = 3;
+  // Web 端生成的设备标识，用于区分登录设备。
+  string device_id = 4;
+}
+
+// Web 用户登录参数。
+message LoginRequest {
+  // 注册时使用的邮箱；忽略首尾空格和大小写。
+  string email = 1 [(google.api.field_behavior) = REQUIRED];
+  // 登录密码。
+  string password = 2 [(google.api.field_behavior) = REQUIRED];
+  // Web 端生成的设备标识，用于区分登录设备。
+  string device_id = 3;
+}
+
+// Web 注册结果。
+message RegisterResponse {
+  // 调用业务接口使用的访问令牌。
+  string access_token = 1;
+  // 换取新访问令牌使用的刷新令牌。
+  string refresh_token = 2;
+  // 访问令牌剩余有效秒数。
+  int64 expires_in_seconds = 3;
+  // 当前登录用户。
+  User user = 4;
+  // 是否需要完成健身档案引导。
+  bool onboarding_required = 5;
+}
+
+// Web 登录结果。
+message LoginResponse {
+  // 调用业务接口使用的访问令牌。
+  string access_token = 1;
+  // 换取新访问令牌使用的刷新令牌。
+  string refresh_token = 2;
+  // 访问令牌剩余有效秒数。
+  int64 expires_in_seconds = 3;
+  // 当前登录用户。
+  User user = 4;
+  // 是否需要完成健身档案引导。
+  bool onboarding_required = 5;
+}
+
+// 微信登录参数。
 message WechatLoginRequest {
-  string code = 1;
+  // wx.login 返回的一次性临时凭证。
+  string code = 1 [(google.api.field_behavior) = REQUIRED];
+  // 小程序侧生成的设备标识，用于区分登录设备。
   string device_id = 2;
 }
 
+// 微信登录结果。
 message WechatLoginResponse {
+  // 调用业务接口使用的访问令牌。
   string access_token = 1;
+  // 换取新访问令牌使用的刷新令牌。
   string refresh_token = 2;
+  // 访问令牌剩余有效秒数。
   int64 expires_in_seconds = 3;
+  // 当前登录用户。
   User user = 4;
+  // 是否为该微信用户首次登录。
   bool is_new_user = 5;
+  // 是否需要完成健身档案引导。
   bool onboarding_required = 6;
 }
 
-message RefreshTokenRequest {
-  string refresh_token = 1;
+// uTools 登录参数。
+message UToolsLoginRequest {
+  // utools.fetchUserServerTemporaryToken 返回的一次性临时令牌。
+  string temporary_token = 1 [(google.api.field_behavior) = REQUIRED];
+  // 插件侧生成并持久化在本机的非敏感设备标识。
+  string device_id = 2;
 }
 
-message RefreshTokenResponse {
+// uTools 登录结果。
+message UToolsLoginResponse {
+  // 调用业务接口使用的访问令牌。
   string access_token = 1;
+  // 换取新访问令牌使用的刷新令牌。
   string refresh_token = 2;
+  // 访问令牌剩余有效秒数。
+  int64 expires_in_seconds = 3;
+  // 当前登录用户。
+  User user = 4;
+  // 是否为该 uTools 用户首次登录。
+  bool is_new_user = 5;
+  // 是否需要完成健身档案引导。
+  bool onboarding_required = 6;
+}
+
+// 刷新令牌参数。
+message RefreshTokenRequest {
+  // 登录或上一次刷新返回的刷新令牌。
+  string refresh_token = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// 刷新令牌结果。
+message RefreshTokenResponse {
+  // 新访问令牌。
+  string access_token = 1;
+  // 新刷新令牌，旧刷新令牌立即失效。
+  string refresh_token = 2;
+  // 新访问令牌剩余有效秒数。
   int64 expires_in_seconds = 3;
 }
 
+// 退出登录参数。
 message LogoutRequest {
-  string refresh_token = 1;
+  // 需要撤销的刷新令牌。
+  string refresh_token = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 退出登录结果，无响应字段。
 message LogoutResponse {}
 
+// 用户基本信息。
 message User {
+  // 系统内部用户 UUID。
   string user_id = 1;
+  // 用户展示昵称。
   string nickname = 2;
+  // 用户头像资源地址。
   string avatar_uri = 3;
+  // 用户状态，例如 active、disabled。
   string status = 4;
 }
 
+// 用户健身目标和训练偏好。
 message FitnessProfile {
+  // 系统内部用户 UUID。
   string user_id = 1;
+  // 健身目标，例如增肌、减脂、塑形。
   string goal = 2;
+  // 训练经验等级，例如 beginner、intermediate、advanced。
   string experience_level = 3;
+  // 每周计划训练天数，范围 0 到 7。
   int32 days_per_week = 4;
+  // 单次计划训练分钟数，不能为负数。
   int32 duration_minutes = 5;
+  // 用户可使用的器材编码列表。
   repeated string available_equipment_codes = 6;
+  // 伤病或动作限制说明。
   repeated string injury_notes = 7;
+  // 是否已完成首次健身档案引导。
   bool onboarding_completed = 8;
 }
 
+// 查询健身档案参数。
 message GetFitnessProfileRequest {
-  string user_id = 1;
+  // 系统内部用户 UUID。
+  string user_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 查询健身档案结果。
 message GetFitnessProfileResponse {
+  // 用户健身档案。
   FitnessProfile profile = 1;
 }
 
+// 更新健身档案参数。
 message UpdateFitnessProfileRequest {
-  FitnessProfile profile = 1;
+  // 需要保存的健身档案。
+  FitnessProfile profile = 1 [(google.api.field_behavior) = REQUIRED];
+  // 路径中的系统内部用户 UUID。
+  string user_id = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 更新健身档案结果。
 message UpdateFitnessProfileResponse {
+  // 更新后的用户健身档案。
   FitnessProfile profile = 1;
 }
 
+// 生成训练计划参数。
 message GenerateWorkoutPlanRequest {
-  string user_id = 1;
+  // 系统内部用户 UUID。
+  string user_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 用户训练计划摘要。
 message WorkoutPlan {
+  // 训练计划 UUID。
   string plan_id = 1;
+  // 计划所属用户 UUID。
   string user_id = 2;
+  // 生成计划时使用的健身目标。
   string goal = 3;
+  // 计划状态，例如 draft、active、completed、cancelled。
   string status = 4;
 }
 
+// 生成训练计划结果。
 message GenerateWorkoutPlanResponse {
+  // 新生成的训练计划。
   WorkoutPlan plan = 1;
 }
 
+// 查询训练计划参数。
 message GetWorkoutPlanRequest {
-  string user_id = 1;
-  string plan_id = 2;
+  // 系统内部用户 UUID。
+  string user_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // 训练计划 UUID。
+  string plan_id = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 查询训练计划结果。
 message GetWorkoutPlanResponse {
+  // 指定的训练计划。
   WorkoutPlan plan = 1;
 }
 
+// 每日打卡参数。
 message CheckInRequest {
-  string user_id = 1;
+  // 系统内部用户 UUID。
+  string user_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 每日打卡结果。
 message CheckInResponse {
+  // 包含今天在内的连续打卡天数。
   int32 current_streak_days = 1;
 }

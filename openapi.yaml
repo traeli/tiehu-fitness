@@ -3,13 +3,34 @@
 
 openapi: 3.0.3
 info:
-    title: ""
-    version: 0.0.1
+    title: 铁虎健身教练 API
+    description: 微信小程序健身辅助后端接口，包含用户、健身内容和 AI 视觉分析能力。
+    version: 0.1.0
 paths:
+    /v1/auth/login:
+        post:
+            tags:
+                - UserService
+            description: Login 使用邮箱和密码登录 Web 账号。
+            operationId: UserService_Login
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/user.v1.LoginRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.LoginResponse'
     /v1/auth/logout:
         post:
             tags:
                 - UserService
+            description: Logout 撤销当前刷新令牌对应的会话。
             operationId: UserService_Logout
             requestBody:
                 content:
@@ -24,10 +45,30 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/user.v1.LogoutResponse'
+    /v1/auth/register:
+        post:
+            tags:
+                - UserService
+            description: Register 使用邮箱创建 Web 用户账号并签发登录令牌。
+            operationId: UserService_Register
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/user.v1.RegisterRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.RegisterResponse'
     /v1/auth/token:refresh:
         post:
             tags:
                 - UserService
+            description: RefreshToken 轮换刷新令牌并签发一组新令牌。
             operationId: UserService_RefreshToken
             requestBody:
                 content:
@@ -42,10 +83,30 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/user.v1.RefreshTokenResponse'
+    /v1/auth/utools/login:
+        post:
+            tags:
+                - UserService
+            description: UToolsLogin 使用 uTools 用户服务端临时令牌登录，首次登录会自动注册。
+            operationId: UserService_UToolsLogin
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/user.v1.UToolsLoginRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.UToolsLoginResponse'
     /v1/auth/wechat/login:
         post:
             tags:
                 - UserService
+            description: WechatLogin 使用 wx.login 返回的临时 code 登录，首次登录会自动注册。
             operationId: UserService_WechatLogin
             requestBody:
                 content:
@@ -64,10 +125,12 @@ paths:
         get:
             tags:
                 - ContentService
+            description: GetEquipment 查询已发布的器材详情。
             operationId: ContentService_GetEquipment
             parameters:
                 - name: equipmentCode
                   in: path
+                  description: 器材编码。
                   required: true
                   schema:
                     type: string
@@ -82,10 +145,12 @@ paths:
         get:
             tags:
                 - ContentService
+            description: RecommendExercises 查询指定器材适用的已发布动作。
             operationId: ContentService_RecommendExercises
             parameters:
                 - name: equipmentCode
                   in: path
+                  description: 器材编码。
                   required: true
                   schema:
                     type: string
@@ -100,10 +165,12 @@ paths:
         get:
             tags:
                 - ContentService
+            description: GetExercise 查询已发布的动作和教学信息。
             operationId: ContentService_GetExercise
             parameters:
                 - name: exerciseCode
                   in: path
+                  description: 动作编码。
                   required: true
                   schema:
                     type: string
@@ -114,14 +181,210 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/content.v1.GetExerciseResponse'
-    /v1/users/{profile.user_id}/fitness-profile:
+    /v1/meeting-quota:
+        get:
+            tags:
+                - MeetingService
+            description: GetMeetingQuota 查询当前用户在本计费周期的会议额度。
+            operationId: MeetingService_GetMeetingQuota
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/meeting.v1.GetMeetingQuotaResponse'
+    /v1/meetings:
+        post:
+            tags:
+                - MeetingService
+            description: CreateMeeting 创建并开始会议；HTTP 调用必须携带 Idempotency-Key。
+            operationId: MeetingService_CreateMeeting
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/meeting.v1.CreateMeetingRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/meeting.v1.CreateMeetingResponse'
+    /v1/meetings/{meetingId}:
+        get:
+            tags:
+                - MeetingService
+            description: GetMeeting 查询当前用户拥有的会议及转写阶段状态。
+            operationId: MeetingService_GetMeeting
+            parameters:
+                - name: meetingId
+                  in: path
+                  description: 当前用户拥有的会议 UUID。
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/meeting.v1.GetMeetingResponse'
+    /v1/meetings/{meetingId}/summary:
+        get:
+            tags:
+                - MeetingService
+            description: GetMeetingSummary 查询当前会议最新可展示的结构化纪要及生成状态。
+            operationId: MeetingService_GetMeetingSummary
+            parameters:
+                - name: meetingId
+                  in: path
+                  description: 当前用户拥有的会议 UUID。
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/meeting.v1.GetMeetingSummaryResponse'
+    /v1/meetings/{meetingId}/summary:regenerate:
+        post:
+            tags:
+                - MeetingService
+            description: RegenerateMeetingSummary 基于当前最终转写版本异步重新生成纪要；HTTP 调用必须携带 Idempotency-Key。
+            operationId: MeetingService_RegenerateMeetingSummary
+            parameters:
+                - name: meetingId
+                  in: path
+                  description: 当前用户拥有的会议 UUID。
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/meeting.v1.RegenerateMeetingSummaryRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/meeting.v1.RegenerateMeetingSummaryResponse'
+    /v1/meetings/{meetingId}/transcript-segments:
+        get:
+            tags:
+                - MeetingService
+            description: ListTranscriptSegments 分页查询会议的最终转写片段。
+            operationId: MeetingService_ListTranscriptSegments
+            parameters:
+                - name: meetingId
+                  in: path
+                  description: 当前用户拥有的会议 UUID。
+                  required: true
+                  schema:
+                    type: string
+                - name: pageSize
+                  in: query
+                  description: 单页条数；服务端必须限制最大值。
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageToken
+                  in: query
+                  description: 上一页返回的不透明分页令牌。
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/meeting.v1.ListTranscriptSegmentsResponse'
+    /v1/meetings/{meetingId}:stop:
+        post:
+            tags:
+                - MeetingService
+            description: StopMeeting 幂等停止会议；HTTP 调用必须携带 Idempotency-Key。
+            operationId: MeetingService_StopMeeting
+            parameters:
+                - name: meetingId
+                  in: path
+                  description: 当前用户拥有的会议 UUID。
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/meeting.v1.StopMeetingRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/meeting.v1.StopMeetingResponse'
+    /v1/users/{userId}/check-ins:
+        post:
+            tags:
+                - UserService
+            description: CheckIn 完成当天打卡并返回当前连续打卡天数。
+            operationId: UserService_CheckIn
+            parameters:
+                - name: userId
+                  in: path
+                  description: 系统内部用户 UUID。
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.CheckInResponse'
+    /v1/users/{userId}/fitness-profile:
+        get:
+            tags:
+                - UserService
+            description: GetFitnessProfile 查询用户的健身目标和训练偏好。
+            operationId: UserService_GetFitnessProfile
+            parameters:
+                - name: userId
+                  in: path
+                  description: 系统内部用户 UUID。
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/user.v1.GetFitnessProfileResponse'
         put:
             tags:
                 - UserService
+            description: UpdateFitnessProfile 更新用户的健身目标和训练偏好。
             operationId: UserService_UpdateFitnessProfile
             parameters:
-                - name: profile.user_id
+                - name: userId
                   in: path
+                  description: 路径中的系统内部用户 UUID。
                   required: true
                   schema:
                     type: string
@@ -138,61 +401,22 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/user.v1.UpdateFitnessProfileResponse'
-    /v1/users/{userId}/check-ins:
-        post:
-            tags:
-                - UserService
-            operationId: UserService_CheckIn
-            parameters:
-                - name: userId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/user.v1.CheckInRequest'
-                required: true
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/user.v1.CheckInResponse'
-    /v1/users/{userId}/fitness-profile:
-        get:
-            tags:
-                - UserService
-            operationId: UserService_GetFitnessProfile
-            parameters:
-                - name: userId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/user.v1.GetFitnessProfileResponse'
     /v1/users/{userId}/workout-plans/{planId}:
         get:
             tags:
                 - UserService
+            description: GetWorkoutPlan 查询指定训练计划。
             operationId: UserService_GetWorkoutPlan
             parameters:
                 - name: userId
                   in: path
+                  description: 系统内部用户 UUID。
                   required: true
                   schema:
                     type: string
                 - name: planId
                   in: path
+                  description: 训练计划 UUID。
                   required: true
                   schema:
                     type: string
@@ -207,19 +431,15 @@ paths:
         post:
             tags:
                 - UserService
+            description: GenerateWorkoutPlan 根据已完成的健身档案生成训练计划。
             operationId: UserService_GenerateWorkoutPlan
             parameters:
                 - name: userId
                   in: path
+                  description: 系统内部用户 UUID。
                   required: true
                   schema:
                     type: string
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/user.v1.GenerateWorkoutPlanRequest'
-                required: true
             responses:
                 "200":
                     description: OK
@@ -231,6 +451,7 @@ paths:
         post:
             tags:
                 - VisionService
+            description: RecognizeEquipment 创建图片器材识别任务。
             operationId: VisionService_RecognizeEquipment
             requestBody:
                 content:
@@ -249,10 +470,12 @@ paths:
         get:
             tags:
                 - VisionService
+            description: GetAnalysisJob 查询异步分析任务的状态和结果。
             operationId: VisionService_GetAnalysisJob
             parameters:
                 - name: jobId
                   in: path
+                  description: AI 分析任务 UUID。
                   required: true
                   schema:
                     type: string
@@ -267,6 +490,7 @@ paths:
         post:
             tags:
                 - VisionService
+            description: AnalyzePosture 创建视频姿势分析任务。
             operationId: VisionService_AnalyzePosture
             requestBody:
                 content:
@@ -288,51 +512,71 @@ components:
             properties:
                 equipmentCode:
                     type: string
+                    description: 稳定且唯一的器材编码。
                 name:
                     type: string
+                    description: 器材展示名称。
                 description:
                     type: string
+                    description: 器材用途说明。
                 targetMuscles:
                     type: array
                     items:
                         type: string
+                    description: 主要训练肌群。
                 safetyTips:
                     type: array
                     items:
                         type: string
+                    description: 使用器材时的安全提醒。
+            description: 健身器材内容。
         content.v1.Exercise:
             type: object
             properties:
                 exerciseCode:
                     type: string
+                    description: 稳定且唯一的动作编码。
                 name:
                     type: string
+                    description: 动作展示名称。
                 equipmentCode:
                     type: string
+                    description: 动作使用的器材编码。
                 instructionVideoUri:
                     type: string
+                    description: 教学视频资源地址。
                 targetMuscles:
                     type: array
                     items:
                         type: string
+                    description: 动作主要训练肌群。
                 keyPoints:
                     type: array
                     items:
                         type: string
+                    description: 动作执行要点。
                 commonMistakes:
                     type: array
                     items:
                         type: string
+                    description: 常见错误动作。
+            description: 健身动作和教学内容。
         content.v1.GetEquipmentResponse:
             type: object
             properties:
                 equipment:
-                    $ref: '#/components/schemas/content.v1.Equipment'
+                    allOf:
+                        - $ref: '#/components/schemas/content.v1.Equipment'
+                    description: 指定器材详情。
+            description: 查询器材结果。
         content.v1.GetExerciseResponse:
             type: object
             properties:
                 exercise:
-                    $ref: '#/components/schemas/content.v1.Exercise'
+                    allOf:
+                        - $ref: '#/components/schemas/content.v1.Exercise'
+                    description: 指定动作详情。
+            description: 查询动作结果。
         content.v1.RecommendExercisesResponse:
             type: object
             properties:
@@ -340,182 +584,824 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/content.v1.Exercise'
-        user.v1.CheckInRequest:
+                    description: 适用于指定器材的动作列表。
+            description: 推荐动作结果。
+        meeting.v1.AudioSpec:
             type: object
             properties:
-                userId:
+                format:
+                    enum:
+                        - AUDIO_FORMAT_UNSPECIFIED
+                        - AUDIO_FORMAT_PCM_S16LE
                     type: string
+                    description: 规范化音频格式。
+                    format: enum
+                mimeType:
+                    type: string
+                    description: 供浏览器和 uTools 选择编码器的标准 MIME。
+                sampleRate:
+                    type: integer
+                    description: 采样率，单位 Hz。
+                    format: int32
+                channels:
+                    type: integer
+                    description: 声道数；V1 必须为 1。
+                    format: int32
+                chunkDuration:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 推荐音频分片时长。
+                maxChunkBytes:
+                    type: integer
+                    description: 单个业务 WebSocket 音频消息允许的最大音频字节数。
+                    format: int32
+            description: AudioSpec 描述实时音频编码和分片边界。
+        meeting.v1.CreateMeetingRequest:
+            required:
+                - language
+                - transcriptionConsent
+            type: object
+            properties:
+                language:
+                    enum:
+                        - MEETING_LANGUAGE_UNSPECIFIED
+                        - MEETING_LANGUAGE_AUTO
+                        - MEETING_LANGUAGE_ZH_CN
+                        - MEETING_LANGUAGE_EN_US
+                    type: string
+                    description: 识别语言偏好。
+                    format: enum
+                retainAudio:
+                    type: boolean
+                    description: 是否在识别完成后继续保留云端原始录音。
+                transcriptionConsent:
+                    type: boolean
+                    description: 用户是否明确同意把音频发送到云端处理；必须为 true。
+            description: CreateMeetingRequest 是创建会议参数。
+        meeting.v1.CreateMeetingResponse:
+            type: object
+            properties:
+                meeting:
+                    allOf:
+                        - $ref: '#/components/schemas/meeting.v1.Meeting'
+                    description: 新建或由相同幂等键命中的会议。
+                transcriptionSession:
+                    allOf:
+                        - $ref: '#/components/schemas/meeting.v1.TranscriptionSession'
+                    description: vision-service 签发的一次性实时转写会话。
+            description: CreateMeetingResponse 返回会议和短期实时转写连接参数。
+        meeting.v1.GetMeetingQuotaResponse:
+            type: object
+            properties:
+                quota:
+                    allOf:
+                        - $ref: '#/components/schemas/meeting.v1.MeetingQuota'
+                    description: 当前计费周期的额度快照。
+            description: GetMeetingQuotaResponse 返回当前用户额度。
+        meeting.v1.GetMeetingResponse:
+            type: object
+            properties:
+                meeting:
+                    allOf:
+                        - $ref: '#/components/schemas/meeting.v1.Meeting'
+                    description: 当前会议。
+            description: GetMeetingResponse 返回会议详情。
+        meeting.v1.GetMeetingSummaryResponse:
+            type: object
+            properties:
+                status:
+                    enum:
+                        - MEETING_SUMMARY_STATUS_UNSPECIFIED
+                        - MEETING_SUMMARY_STATUS_NOT_STARTED
+                        - MEETING_SUMMARY_STATUS_PENDING
+                        - MEETING_SUMMARY_STATUS_PROCESSING
+                        - MEETING_SUMMARY_STATUS_SUCCEEDED
+                        - MEETING_SUMMARY_STATUS_FAILED
+                    type: string
+                    description: 当前纪要生成状态。
+                    format: enum
+                summary:
+                    allOf:
+                        - $ref: '#/components/schemas/meeting.v1.MeetingSummary'
+                    description: 最新纪要；尚未成功生成时为空。
+                failureReason:
+                    type: string
+                    description: 可安全展示的稳定失败原因；非失败状态时为空。
+            description: GetMeetingSummaryResponse 返回纪要状态和最新成功或正在生成的版本。
+        meeting.v1.ListTranscriptSegmentsResponse:
+            type: object
+            properties:
+                segments:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/meeting.v1.TranscriptSegment'
+                    description: 按 sequence_no 升序排列的最终片段。
+                nextPageToken:
+                    type: string
+                    description: 下一页令牌；为空表示没有下一页。
+            description: ListTranscriptSegmentsResponse 返回一页最终转写片段。
+        meeting.v1.Meeting:
+            type: object
+            properties:
+                meetingId:
+                    type: string
+                    description: 会议 UUID。
+                status:
+                    enum:
+                        - MEETING_STATUS_UNSPECIFIED
+                        - MEETING_STATUS_RECORDING
+                        - MEETING_STATUS_PROCESSING
+                        - MEETING_STATUS_COMPLETED
+                        - MEETING_STATUS_PARTIALLY_COMPLETED
+                        - MEETING_STATUS_FAILED
+                        - MEETING_STATUS_CANCELLED
+                    type: string
+                    description: 当前会议业务状态。
+                    format: enum
+                transcriptionStatus:
+                    enum:
+                        - TRANSCRIPTION_STATUS_UNSPECIFIED
+                        - TRANSCRIPTION_STATUS_PENDING
+                        - TRANSCRIPTION_STATUS_CONNECTING
+                        - TRANSCRIPTION_STATUS_STREAMING
+                        - TRANSCRIPTION_STATUS_FINISHING
+                        - TRANSCRIPTION_STATUS_SUCCEEDED
+                        - TRANSCRIPTION_STATUS_FAILED
+                        - TRANSCRIPTION_STATUS_CANCELLED
+                        - TRANSCRIPTION_STATUS_EXPIRED
+                    type: string
+                    description: 当前实时转写阶段状态。
+                    format: enum
+                language:
+                    enum:
+                        - MEETING_LANGUAGE_UNSPECIFIED
+                        - MEETING_LANGUAGE_AUTO
+                        - MEETING_LANGUAGE_ZH_CN
+                        - MEETING_LANGUAGE_EN_US
+                    type: string
+                    description: 会议识别语言偏好。
+                    format: enum
+                retainAudio:
+                    type: boolean
+                    description: 是否保留云端原始录音。
+                grantedAudioDuration:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 本次会议获准发送到 ASR 的最大音频时长。
+                startedAt:
+                    type: string
+                    description: 已开始会议的时间。
+                    format: date-time
+                stoppedAt:
+                    type: string
+                    description: 停止录音的时间；尚未停止时为空。
+                    format: date-time
+                createdAt:
+                    type: string
+                    description: 资源创建时间。
+                    format: date-time
+                updatedAt:
+                    type: string
+                    description: 资源最后更新时间。
+                    format: date-time
+                summaryStatus:
+                    enum:
+                        - MEETING_SUMMARY_STATUS_UNSPECIFIED
+                        - MEETING_SUMMARY_STATUS_NOT_STARTED
+                        - MEETING_SUMMARY_STATUS_PENDING
+                        - MEETING_SUMMARY_STATUS_PROCESSING
+                        - MEETING_SUMMARY_STATUS_SUCCEEDED
+                        - MEETING_SUMMARY_STATUS_FAILED
+                    type: string
+                    description: 当前会议纪要生成状态。
+                    format: enum
+                summaryVersion:
+                    type: string
+                    description: 当前对外展示的成功纪要版本；尚无成功纪要时为零。
+                transcriptRevision:
+                    type: string
+                    description: 当前最终转写快照版本。
+            description: Meeting 是 core-service 拥有的会议资源。
+        meeting.v1.MeetingActionItem:
+            type: object
+            properties:
+                assignee:
+                    type: string
+                    description: 可空负责人。
+                task:
+                    type: string
+                    description: 明确、可执行的任务描述。
+                dueText:
+                    type: string
+                    description: 可空的原文期限；无法可靠解析时不转换为时间戳。
+                status:
+                    enum:
+                        - MEETING_ACTION_ITEM_STATUS_UNSPECIFIED
+                        - MEETING_ACTION_ITEM_STATUS_PENDING
+                    type: string
+                    description: 待办事项初始状态。
+                    format: enum
+            description: MeetingActionItem 是会议总结提取出的一个待办事项。
+        meeting.v1.MeetingQuota:
+            type: object
+            properties:
+                periodStart:
+                    type: string
+                    description: 当前自然月周期开始时间。
+                    format: date-time
+                periodEnd:
+                    type: string
+                    description: 当前自然月周期结束时间。
+                    format: date-time
+                limit:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 当前周期允许的音频总时长；为兼容旧客户端保留，值与 total_limit 相同。
+                consumed:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 已最终结算的音频时长。
+                reserved:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 已由活跃会议预占但尚未结算的音频时长。
+                remaining:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 当前仍可预占的音频时长。
+                maxMeetingDuration:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 单场会议硬上限。
+                maxConcurrentMeetings:
+                    type: integer
+                    description: 单用户允许的活跃会议数。
+                    format: int32
+                activeMeetings:
+                    type: integer
+                    description: 当前活跃会议数。
+                    format: int32
+                baseLimit:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 当前周期从默认策略或用户覆盖配置快照得到的基础额度。
+                purchasedLimit:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 当前周期已支付订单累计增加的额度。
+                totalLimit:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 当前周期基础额度与购买额度之和。
+            description: MeetingQuota 是当前用户在一个计费周期内的额度快照。
+        meeting.v1.MeetingSummary:
+            type: object
+            properties:
+                meetingId:
+                    type: string
+                    description: 会议 UUID。
+                version:
+                    type: string
+                    description: 会议内严格递增的纪要版本。
+                sourceTranscriptRevision:
+                    type: string
+                    description: 本纪要使用的最终转写快照版本。
+                topic:
+                    type: string
+                    description: 简短会议主题。
+                abstract:
+                    type: string
+                    description: 会议摘要。
+                keyDiscussions:
+                    type: array
+                    items:
+                        type: string
+                    description: 关键讨论内容。
+                decisions:
+                    type: array
+                    items:
+                        type: string
+                    description: 已达成的决定。
+                actionItems:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/meeting.v1.MeetingActionItem'
+                    description: 会议待办事项。
+                risks:
+                    type: array
+                    items:
+                        type: string
+                    description: 风险和待确认事项。
+                modelName:
+                    type: string
+                    description: 实际生成该版本的模型名称。
+                promptVersion:
+                    type: string
+                    description: 生成该版本的服务端 Prompt 版本。
+                generatedAt:
+                    type: string
+                    description: 该纪要生成完成的时间。
+                    format: date-time
+                provider:
+                    type: string
+                    description: 实际处理该版本的 LLM Provider 标识。
+                inputTokens:
+                    type: string
+                    description: Provider 报告的输入 token 数；不提供时为零。
+                outputTokens:
+                    type: string
+                    description: Provider 报告的输出 token 数；不提供时为零。
+            description: MeetingSummary 是经过服务端校验的版本化结构化会议纪要。
+        meeting.v1.RegenerateMeetingSummaryRequest:
+            required:
+                - meetingId
+            type: object
+            properties:
+                meetingId:
+                    type: string
+                    description: 当前用户拥有的会议 UUID。
+            description: RegenerateMeetingSummaryRequest 是重新生成会议纪要的参数。
+        meeting.v1.RegenerateMeetingSummaryResponse:
+            type: object
+            properties:
+                status:
+                    enum:
+                        - MEETING_SUMMARY_STATUS_UNSPECIFIED
+                        - MEETING_SUMMARY_STATUS_NOT_STARTED
+                        - MEETING_SUMMARY_STATUS_PENDING
+                        - MEETING_SUMMARY_STATUS_PROCESSING
+                        - MEETING_SUMMARY_STATUS_SUCCEEDED
+                        - MEETING_SUMMARY_STATUS_FAILED
+                    type: string
+                    description: 新任务的当前生成状态。
+                    format: enum
+                version:
+                    type: string
+                    description: 本次重新生成对应的纪要版本。
+            description: RegenerateMeetingSummaryResponse 返回新创建或由幂等键命中的纪要任务。
+        meeting.v1.StopMeetingRequest:
+            required:
+                - meetingId
+            type: object
+            properties:
+                meetingId:
+                    type: string
+                    description: 当前用户拥有的会议 UUID。
+            description: StopMeetingRequest 是停止会议参数。
+        meeting.v1.StopMeetingResponse:
+            type: object
+            properties:
+                meeting:
+                    allOf:
+                        - $ref: '#/components/schemas/meeting.v1.Meeting'
+                    description: 最新会议状态；响应不承诺已经生成会议纪要。
+            description: StopMeetingResponse 返回停止后的最新会议状态。
+        meeting.v1.TranscriptSegment:
+            type: object
+            properties:
+                segmentId:
+                    type: string
+                    description: vision-service 生成的稳定片段 ID。
+                sequenceNo:
+                    type: string
+                    description: 会议内严格递增的最终片段序号。
+                startOffset:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 片段相对会议音频的开始偏移。
+                endOffset:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: 片段相对会议音频的结束偏移。
+                speakerLabel:
+                    type: string
+                    description: 可空的临时说话人标签；V1 不承诺真实身份。
+                content:
+                    type: string
+                    description: 最终转写正文。
+                language:
+                    enum:
+                        - MEETING_LANGUAGE_UNSPECIFIED
+                        - MEETING_LANGUAGE_AUTO
+                        - MEETING_LANGUAGE_ZH_CN
+                        - MEETING_LANGUAGE_EN_US
+                    type: string
+                    description: 该片段识别出的语言。
+                    format: enum
+                confidence:
+                    type: number
+                    description: Provider 返回的置信度；Provider 不提供时为空。
+                    format: float
+                createdAt:
+                    type: string
+                    description: 最终片段生成时间。
+                    format: date-time
+            description: TranscriptSegment 是已经最终确认、可以持久化的转写片段。
+        meeting.v1.TranscriptionSession:
+            type: object
+            properties:
+                sessionId:
+                    type: string
+                    description: vision-service 转写会话 UUID。
+                websocketUrl:
+                    type: string
+                    description: vision-service 的完整 WSS 地址，客户端不得自行拼接域名。
+                sessionTicket:
+                    type: string
+                    description: 仅能消费一次的短期 ticket；不得写入日志或 URL query。
+                expiresAt:
+                    type: string
+                    description: ticket 到期时间。
+                    format: date-time
+                audio:
+                    allOf:
+                        - $ref: '#/components/schemas/meeting.v1.AudioSpec'
+                    description: 本次会话实际接受的实时音频约束。
+                grantedAudioDuration:
+                    pattern: ^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$
+                    type: string
+                    description: core-service 为本次 session 预占并授予的最大音频时长。
+            description: TranscriptionSession 是 uTools 建立实时转写 WebSocket 所需的短期参数。
         user.v1.CheckInResponse:
             type: object
             properties:
                 currentStreakDays:
                     type: integer
+                    description: 包含今天在内的连续打卡天数。
                     format: int32
+            description: 每日打卡结果。
         user.v1.FitnessProfile:
             type: object
             properties:
                 userId:
                     type: string
+                    description: 系统内部用户 UUID。
                 goal:
                     type: string
+                    description: 健身目标，例如增肌、减脂、塑形。
                 experienceLevel:
                     type: string
+                    description: 训练经验等级，例如 beginner、intermediate、advanced。
                 daysPerWeek:
                     type: integer
+                    description: 每周计划训练天数，范围 0 到 7。
                     format: int32
                 durationMinutes:
                     type: integer
+                    description: 单次计划训练分钟数，不能为负数。
                     format: int32
                 availableEquipmentCodes:
                     type: array
                     items:
                         type: string
+                    description: 用户可使用的器材编码列表。
                 injuryNotes:
                     type: array
                     items:
                         type: string
+                    description: 伤病或动作限制说明。
                 onboardingCompleted:
                     type: boolean
-        user.v1.GenerateWorkoutPlanRequest:
-            type: object
-            properties:
-                userId:
-                    type: string
+                    description: 是否已完成首次健身档案引导。
+            description: 用户健身目标和训练偏好。
         user.v1.GenerateWorkoutPlanResponse:
             type: object
             properties:
                 plan:
-                    $ref: '#/components/schemas/user.v1.WorkoutPlan'
+                    allOf:
+                        - $ref: '#/components/schemas/user.v1.WorkoutPlan'
+                    description: 新生成的训练计划。
+            description: 生成训练计划结果。
         user.v1.GetFitnessProfileResponse:
             type: object
             properties:
                 profile:
-                    $ref: '#/components/schemas/user.v1.FitnessProfile'
+                    allOf:
+                        - $ref: '#/components/schemas/user.v1.FitnessProfile'
+                    description: 用户健身档案。
+            description: 查询健身档案结果。
         user.v1.GetWorkoutPlanResponse:
             type: object
             properties:
                 plan:
-                    $ref: '#/components/schemas/user.v1.WorkoutPlan'
+                    allOf:
+                        - $ref: '#/components/schemas/user.v1.WorkoutPlan'
+                    description: 指定的训练计划。
+            description: 查询训练计划结果。
+        user.v1.LoginRequest:
+            required:
+                - email
+                - password
+            type: object
+            properties:
+                email:
+                    type: string
+                    description: 注册时使用的邮箱；忽略首尾空格和大小写。
+                password:
+                    type: string
+                    description: 登录密码。
+                deviceId:
+                    type: string
+                    description: Web 端生成的设备标识，用于区分登录设备。
+            description: Web 用户登录参数。
+        user.v1.LoginResponse:
+            type: object
+            properties:
+                accessToken:
+                    type: string
+                    description: 调用业务接口使用的访问令牌。
+                refreshToken:
+                    type: string
+                    description: 换取新访问令牌使用的刷新令牌。
+                expiresInSeconds:
+                    type: string
+                    description: 访问令牌剩余有效秒数。
+                user:
+                    allOf:
+                        - $ref: '#/components/schemas/user.v1.User'
+                    description: 当前登录用户。
+                onboardingRequired:
+                    type: boolean
+                    description: 是否需要完成健身档案引导。
+            description: Web 登录结果。
         user.v1.LogoutRequest:
+            required:
+                - refreshToken
             type: object
             properties:
                 refreshToken:
                     type: string
+                    description: 需要撤销的刷新令牌。
+            description: 退出登录参数。
         user.v1.LogoutResponse:
             type: object
             properties: {}
+            description: 退出登录结果，无响应字段。
         user.v1.RefreshTokenRequest:
+            required:
+                - refreshToken
             type: object
             properties:
                 refreshToken:
                     type: string
+                    description: 登录或上一次刷新返回的刷新令牌。
+            description: 刷新令牌参数。
         user.v1.RefreshTokenResponse:
             type: object
             properties:
                 accessToken:
                     type: string
+                    description: 新访问令牌。
                 refreshToken:
                     type: string
+                    description: 新刷新令牌，旧刷新令牌立即失效。
                 expiresInSeconds:
                     type: string
+                    description: 新访问令牌剩余有效秒数。
+            description: 刷新令牌结果。
+        user.v1.RegisterRequest:
+            required:
+                - email
+                - password
+            type: object
+            properties:
+                email:
+                    type: string
+                    description: 登录邮箱；忽略首尾空格和大小写，必须是完整的公网邮箱地址。
+                password:
+                    type: string
+                    description: 登录密码，长度为 8 到 72 字节。
+                nickname:
+                    type: string
+                    description: 用户展示昵称；为空时使用邮箱 @ 前的本地部分。
+                deviceId:
+                    type: string
+                    description: Web 端生成的设备标识，用于区分登录设备。
+            description: Web 用户注册参数。
+        user.v1.RegisterResponse:
+            type: object
+            properties:
+                accessToken:
+                    type: string
+                    description: 调用业务接口使用的访问令牌。
+                refreshToken:
+                    type: string
+                    description: 换取新访问令牌使用的刷新令牌。
+                expiresInSeconds:
+                    type: string
+                    description: 访问令牌剩余有效秒数。
+                user:
+                    allOf:
+                        - $ref: '#/components/schemas/user.v1.User'
+                    description: 当前登录用户。
+                onboardingRequired:
+                    type: boolean
+                    description: 是否需要完成健身档案引导。
+            description: Web 注册结果。
+        user.v1.UToolsLoginRequest:
+            required:
+                - temporaryToken
+            type: object
+            properties:
+                temporaryToken:
+                    type: string
+                    description: utools.fetchUserServerTemporaryToken 返回的一次性临时令牌。
+                deviceId:
+                    type: string
+                    description: 插件侧生成并持久化在本机的非敏感设备标识。
+            description: uTools 登录参数。
+        user.v1.UToolsLoginResponse:
+            type: object
+            properties:
+                accessToken:
+                    type: string
+                    description: 调用业务接口使用的访问令牌。
+                refreshToken:
+                    type: string
+                    description: 换取新访问令牌使用的刷新令牌。
+                expiresInSeconds:
+                    type: string
+                    description: 访问令牌剩余有效秒数。
+                user:
+                    allOf:
+                        - $ref: '#/components/schemas/user.v1.User'
+                    description: 当前登录用户。
+                isNewUser:
+                    type: boolean
+                    description: 是否为该 uTools 用户首次登录。
+                onboardingRequired:
+                    type: boolean
+                    description: 是否需要完成健身档案引导。
+            description: uTools 登录结果。
         user.v1.UpdateFitnessProfileResponse:
             type: object
             properties:
                 profile:
-                    $ref: '#/components/schemas/user.v1.FitnessProfile'
+                    allOf:
+                        - $ref: '#/components/schemas/user.v1.FitnessProfile'
+                    description: 更新后的用户健身档案。
+            description: 更新健身档案结果。
         user.v1.User:
             type: object
             properties:
                 userId:
                     type: string
+                    description: 系统内部用户 UUID。
                 nickname:
                     type: string
+                    description: 用户展示昵称。
                 avatarUri:
                     type: string
+                    description: 用户头像资源地址。
                 status:
                     type: string
+                    description: 用户状态，例如 active、disabled。
+            description: 用户基本信息。
         user.v1.WechatLoginRequest:
+            required:
+                - code
             type: object
             properties:
                 code:
                     type: string
+                    description: wx.login 返回的一次性临时凭证。
                 deviceId:
                     type: string
+                    description: 小程序侧生成的设备标识，用于区分登录设备。
+            description: 微信登录参数。
         user.v1.WechatLoginResponse:
             type: object
             properties:
                 accessToken:
                     type: string
+                    description: 调用业务接口使用的访问令牌。
                 refreshToken:
                     type: string
+                    description: 换取新访问令牌使用的刷新令牌。
                 expiresInSeconds:
                     type: string
+                    description: 访问令牌剩余有效秒数。
                 user:
-                    $ref: '#/components/schemas/user.v1.User'
+                    allOf:
+                        - $ref: '#/components/schemas/user.v1.User'
+                    description: 当前登录用户。
                 isNewUser:
                     type: boolean
+                    description: 是否为该微信用户首次登录。
                 onboardingRequired:
                     type: boolean
+                    description: 是否需要完成健身档案引导。
+            description: 微信登录结果。
         user.v1.WorkoutPlan:
             type: object
             properties:
                 planId:
                     type: string
+                    description: 训练计划 UUID。
                 userId:
                     type: string
+                    description: 计划所属用户 UUID。
                 goal:
                     type: string
+                    description: 生成计划时使用的健身目标。
                 status:
                     type: string
+                    description: 计划状态，例如 draft、active、completed、cancelled。
+            description: 用户训练计划摘要。
         vision.v1.AnalysisJob:
             type: object
             properties:
                 jobId:
                     type: string
+                    description: 任务 UUID。
                 type:
-                    type: integer
+                    enum:
+                        - ANALYSIS_TYPE_UNSPECIFIED
+                        - ANALYSIS_TYPE_EQUIPMENT
+                        - ANALYSIS_TYPE_POSTURE
+                    type: string
+                    description: 分析任务类型。
                     format: enum
                 status:
-                    type: integer
+                    enum:
+                        - ANALYSIS_STATUS_UNSPECIFIED
+                        - ANALYSIS_STATUS_PENDING
+                        - ANALYSIS_STATUS_PROCESSING
+                        - ANALYSIS_STATUS_SUCCEEDED
+                        - ANALYSIS_STATUS_FAILED
+                    type: string
+                    description: 当前任务状态。
                     format: enum
                 mediaUri:
                     type: string
+                    description: 被分析的图片或视频地址。
                 resultJson:
                     type: string
+                    description: 成功后的结构化 JSON 结果；任务完成前为空。
                 errorMessage:
                     type: string
+                    description: 失败原因；任务未失败时为空。
+            description: AI 异步分析任务。
         vision.v1.AnalyzePostureRequest:
+            required:
+                - videoUri
+                - exerciseCode
+                - userId
             type: object
             properties:
                 videoUri:
                     type: string
+                    description: 已上传视频的对象存储地址。
                 exerciseCode:
                     type: string
+                    description: 需要分析的标准动作编码。
                 userId:
                     type: string
+                    description: 发起任务的系统内部用户 UUID。
+            description: 姿势分析参数。
         vision.v1.AnalyzePostureResponse:
             type: object
             properties:
                 job:
-                    $ref: '#/components/schemas/vision.v1.AnalysisJob'
+                    allOf:
+                        - $ref: '#/components/schemas/vision.v1.AnalysisJob'
+                    description: 新创建的异步分析任务。
+            description: 创建姿势分析任务结果。
         vision.v1.GetAnalysisJobResponse:
             type: object
             properties:
                 job:
-                    $ref: '#/components/schemas/vision.v1.AnalysisJob'
+                    allOf:
+                        - $ref: '#/components/schemas/vision.v1.AnalysisJob'
+                    description: 当前分析任务。
+            description: 查询分析任务结果。
         vision.v1.RecognizeEquipmentRequest:
+            required:
+                - imageUri
+                - userId
             type: object
             properties:
                 imageUri:
                     type: string
+                    description: 已上传图片的对象存储地址。
                 userId:
                     type: string
+                    description: 发起任务的系统内部用户 UUID。
+            description: 器材识别参数。
         vision.v1.RecognizeEquipmentResponse:
             type: object
             properties:
                 job:
-                    $ref: '#/components/schemas/vision.v1.AnalysisJob'
+                    allOf:
+                        - $ref: '#/components/schemas/vision.v1.AnalysisJob'
+                    description: 新创建的异步分析任务。
+            description: 创建器材识别任务结果。
 tags:
     - name: ContentService
+      description: ContentService 提供健身器材和教学动作内容查询能力。
+    - name: MeetingService
+      description: MeetingService 提供当前登录用户的会议控制、额度和最终转写查询能力。
     - name: UserService
+      description: UserService 提供 Web/小程序登录、用户档案、训练计划和打卡能力。
     - name: VisionService
+      description: VisionService 提供图片器材识别和视频姿势分析任务能力。

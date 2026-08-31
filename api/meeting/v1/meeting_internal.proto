@@ -1,0 +1,214 @@
+syntax = "proto3";
+
+package meeting.v1;
+
+option go_package = "github.com/tiehu-ai/tiehu-fitness/api/meeting/v1;meetingv1";
+
+import "google/api/field_behavior.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "meeting/v1/meeting.proto";
+
+// MeetingIngestInternalService 提供 vision-service 到 core-service 的内部转写结果和用量写入能力。
+service MeetingIngestInternalService {
+  // AppendFinalTranscriptSegments 幂等批量追加已经最终确认的转写片段。
+  rpc AppendFinalTranscriptSegments(AppendFinalTranscriptSegmentsRequest) returns (AppendFinalTranscriptSegmentsResponse);
+
+  // ReportTranscriptionUsage 幂等上报 vision-service 已接受的累计音频时长。
+  rpc ReportTranscriptionUsage(ReportTranscriptionUsageRequest) returns (ReportTranscriptionUsageResponse);
+
+  // CompleteTranscription 幂等完成转写并结算用户额度预占。
+  rpc CompleteTranscription(CompleteTranscriptionRequest) returns (CompleteTranscriptionResponse);
+
+  // FailTranscription 幂等记录转写失败并结算用户额度预占。
+  rpc FailTranscription(FailTranscriptionRequest) returns (FailTranscriptionResponse);
+
+  // GetMeetingTranscriptSnapshot 返回指定版本的完整最终转写，供 vision 生成纪要。
+  rpc GetMeetingTranscriptSnapshot(GetMeetingTranscriptSnapshotRequest) returns (GetMeetingTranscriptSnapshotResponse);
+
+  // CompleteMeetingSummary 幂等保存经过校验的会议纪要。
+  rpc CompleteMeetingSummary(CompleteMeetingSummaryRequest) returns (CompleteMeetingSummaryResponse);
+
+  // FailMeetingSummary 幂等记录会议纪要生成失败。
+  rpc FailMeetingSummary(FailMeetingSummaryRequest) returns (FailMeetingSummaryResponse);
+}
+
+// MeetingSummaryFailureReason 表示可以安全跨服务传播的纪要失败分类。
+enum MeetingSummaryFailureReason {
+  // 未指定失败原因。
+  MEETING_SUMMARY_FAILURE_REASON_UNSPECIFIED = 0;
+  // LLM Provider 暂时不可用。
+  MEETING_SUMMARY_FAILURE_REASON_PROVIDER_UNAVAILABLE = 1;
+  // LLM Provider 拒绝请求。
+  MEETING_SUMMARY_FAILURE_REASON_PROVIDER_REJECTED = 2;
+  // Provider 输出不符合结构或大小约束。
+  MEETING_SUMMARY_FAILURE_REASON_OUTPUT_INVALID = 3;
+  // 最终转写为空或版本不匹配。
+  MEETING_SUMMARY_FAILURE_REASON_TRANSCRIPT_INVALID = 4;
+  // 生成任务超过截止时间。
+  MEETING_SUMMARY_FAILURE_REASON_TIMEOUT = 5;
+  // 已脱敏的未知内部失败。
+  MEETING_SUMMARY_FAILURE_REASON_INTERNAL = 6;
+}
+
+// TranscriptionFailureReason 表示可安全跨服务传播的稳定转写失败分类。
+enum TranscriptionFailureReason {
+  // 未指定失败原因。
+  TRANSCRIPTION_FAILURE_REASON_UNSPECIFIED = 0;
+  // ASR Provider 暂时不可用。
+  TRANSCRIPTION_FAILURE_REASON_PROVIDER_UNAVAILABLE = 1;
+  // ASR Provider 因权限、参数或配额拒绝任务。
+  TRANSCRIPTION_FAILURE_REASON_PROVIDER_REJECTED = 2;
+  // 音频格式或内容不符合约束。
+  TRANSCRIPTION_FAILURE_REASON_AUDIO_INVALID = 3;
+  // 转写任务超过内部截止时间。
+  TRANSCRIPTION_FAILURE_REASON_TIMEOUT = 4;
+  // 用户额度已经耗尽。
+  TRANSCRIPTION_FAILURE_REASON_QUOTA_EXHAUSTED = 5;
+  // 会话被取消。
+  TRANSCRIPTION_FAILURE_REASON_CANCELLED = 6;
+  // 已脱敏的未知内部失败。
+  TRANSCRIPTION_FAILURE_REASON_INTERNAL = 7;
+}
+
+// AppendFinalTranscriptSegmentsRequest 是追加最终片段的内部参数。
+message AppendFinalTranscriptSegmentsRequest {
+  // core-service 会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // vision-service 转写会话 UUID。
+  string session_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // 本批次的稳定 UUID；重试时保持不变。
+  string batch_id = 3 [(google.api.field_behavior) = REQUIRED];
+  // 按 sequence_no 升序排列的最终片段。
+  repeated TranscriptSegment segments = 4 [(google.api.field_behavior) = REQUIRED];
+}
+
+// AppendFinalTranscriptSegmentsResponse 返回 core-service 已确认的最大最终片段序号。
+message AppendFinalTranscriptSegmentsResponse {
+  // core-service 当前已持久化的最大最终片段序号。
+  int64 last_persisted_sequence_no = 1;
+}
+
+// ReportTranscriptionUsageRequest 是累计用量上报参数。
+message ReportTranscriptionUsageRequest {
+  // core-service 会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // vision-service 转写会话 UUID。
+  string session_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // core-service 额度预占 UUID。
+  string reservation_id = 3 [(google.api.field_behavior) = REQUIRED];
+  // vision-service 已接受的唯一有效音频累计时长；只能单调递增。
+  google.protobuf.Duration total_accepted_audio_duration = 4 [(google.api.field_behavior) = REQUIRED];
+  // vision-service 生成该累计值的时间。
+  google.protobuf.Timestamp observed_at = 5 [(google.api.field_behavior) = REQUIRED];
+}
+
+// ReportTranscriptionUsageResponse 返回 core-service 接受的累计用量。
+message ReportTranscriptionUsageResponse {
+  // core-service 当前记录的累计音频时长。
+  google.protobuf.Duration recorded_audio_duration = 1;
+}
+
+// CompleteTranscriptionRequest 是完成转写和结算预占的内部参数。
+message CompleteTranscriptionRequest {
+  // core-service 会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // vision-service 转写会话 UUID。
+  string session_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // core-service 额度预占 UUID。
+  string reservation_id = 3 [(google.api.field_behavior) = REQUIRED];
+  // 最终累计接受的唯一有效音频时长。
+  google.protobuf.Duration total_accepted_audio_duration = 4 [(google.api.field_behavior) = REQUIRED];
+  // Provider 返回的计费时长，仅用于成本审计。
+  google.protobuf.Duration provider_usage_duration = 5;
+  // vision-service 完成转写的时间。
+  google.protobuf.Timestamp completed_at = 6 [(google.api.field_behavior) = REQUIRED];
+}
+
+// CompleteTranscriptionResponse 返回 core-service 最新转写状态。
+message CompleteTranscriptionResponse {
+  // 完成后的转写状态。
+  TranscriptionStatus status = 1;
+  // 已最终结算到本月账本的音频时长。
+  google.protobuf.Duration settled_audio_duration = 2;
+}
+
+// FailTranscriptionRequest 是记录失败和结算预占的内部参数。
+message FailTranscriptionRequest {
+  // core-service 会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // vision-service 转写会话 UUID。
+  string session_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // core-service 额度预占 UUID。
+  string reservation_id = 3 [(google.api.field_behavior) = REQUIRED];
+  // 失败前累计接受的唯一有效音频时长。
+  google.protobuf.Duration total_accepted_audio_duration = 4 [(google.api.field_behavior) = REQUIRED];
+  // 稳定失败分类；不得包含 Provider 原始错误文本。
+  TranscriptionFailureReason reason = 5 [(google.api.field_behavior) = REQUIRED];
+  // vision-service 记录失败的时间。
+  google.protobuf.Timestamp failed_at = 6 [(google.api.field_behavior) = REQUIRED];
+}
+
+// FailTranscriptionResponse 返回 core-service 最新转写状态。
+message FailTranscriptionResponse {
+  // 失败后的转写状态。
+  TranscriptionStatus status = 1;
+  // 已最终结算到本月账本的音频时长。
+  google.protobuf.Duration settled_audio_duration = 2;
+}
+
+// GetMeetingTranscriptSnapshotRequest 查询一个已经冻结的最终转写版本。
+message GetMeetingTranscriptSnapshotRequest {
+  // core-service 会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // 任务创建时记录的最终转写版本。
+  int64 transcript_revision = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetMeetingTranscriptSnapshotResponse 返回有界的完整最终转写。
+message GetMeetingTranscriptSnapshotResponse {
+  // 会议识别语言。
+  MeetingLanguage language = 1;
+  // 实际返回的转写版本。
+  int64 transcript_revision = 2;
+  // 按 sequence_no 升序排列的最终片段。
+  repeated TranscriptSegment segments = 3;
+}
+
+// CompleteMeetingSummaryRequest 是保存成功纪要的内部命令。
+message CompleteMeetingSummaryRequest {
+  // core-service 会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // core-service 预先分配的纪要版本。
+  int64 version = 2 [(google.api.field_behavior) = REQUIRED];
+  // 生成任务使用的最终转写版本。
+  int64 source_transcript_revision = 3 [(google.api.field_behavior) = REQUIRED];
+  // 经过 vision 校验的结构化纪要。
+  MeetingSummary summary = 4 [(google.api.field_behavior) = REQUIRED];
+}
+
+// CompleteMeetingSummaryResponse 返回 core 最新纪要状态。
+message CompleteMeetingSummaryResponse {
+  // 完成后的纪要状态。
+  MeetingSummaryStatus status = 1;
+}
+
+// FailMeetingSummaryRequest 是记录纪要失败的内部命令。
+message FailMeetingSummaryRequest {
+  // core-service 会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // core-service 预先分配的纪要版本。
+  int64 version = 2 [(google.api.field_behavior) = REQUIRED];
+  // 生成任务使用的最终转写版本。
+  int64 source_transcript_revision = 3 [(google.api.field_behavior) = REQUIRED];
+  // 稳定、脱敏的失败分类。
+  MeetingSummaryFailureReason reason = 4 [(google.api.field_behavior) = REQUIRED];
+  // vision 确认失败的时间。
+  google.protobuf.Timestamp failed_at = 5 [(google.api.field_behavior) = REQUIRED];
+}
+
+// FailMeetingSummaryResponse 返回 core 最新纪要状态。
+message FailMeetingSummaryResponse {
+  // 失败后的纪要状态。
+  MeetingSummaryStatus status = 1;
+}

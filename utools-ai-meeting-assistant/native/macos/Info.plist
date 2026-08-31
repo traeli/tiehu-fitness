@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.tiehu.meeting.system-audio</string>
+  <key>CFBundleName</key>
+  <string>Tiehu System Audio</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>用于录制会议中电脑播放的声音并生成实时转写。</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>用于通过系统录屏接口采集会议中的电脑音频，不保存屏幕画面。</string>
+</dict>
+</plist>

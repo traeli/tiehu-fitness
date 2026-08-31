@@ -12,8 +12,10 @@ type ContentService struct {
 	uc *biz.ContentUsecase
 }
 
+// NewContentService 创建健身内容接口服务。
 func NewContentService(uc *biz.ContentUsecase) *ContentService { return &ContentService{uc: uc} }
 
+// GetEquipment 返回指定器材详情。
 func (s *ContentService) GetEquipment(ctx context.Context, req *v1.GetEquipmentRequest) (*v1.GetEquipmentResponse, error) {
 	item, err := s.uc.GetEquipment(ctx, req.GetEquipmentCode())
 	if err != nil {
@@ -22,6 +24,7 @@ func (s *ContentService) GetEquipment(ctx context.Context, req *v1.GetEquipmentR
 	return &v1.GetEquipmentResponse{Equipment: toEquipmentProto(item)}, nil
 }
 
+// RecommendExercises 返回指定器材适用的动作列表。
 func (s *ContentService) RecommendExercises(ctx context.Context, req *v1.RecommendExercisesRequest) (*v1.RecommendExercisesResponse, error) {
 	items, err := s.uc.Recommend(ctx, req.GetEquipmentCode())
 	if err != nil {
@@ -34,6 +37,7 @@ func (s *ContentService) RecommendExercises(ctx context.Context, req *v1.Recomme
 	return reply, nil
 }
 
+// GetExercise 返回指定动作的教学详情。
 func (s *ContentService) GetExercise(ctx context.Context, req *v1.GetExerciseRequest) (*v1.GetExerciseResponse, error) {
 	item, err := s.uc.GetExercise(ctx, req.GetExerciseCode())
 	if err != nil {

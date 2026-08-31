@@ -22,12 +22,16 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// AI 分析任务类型。
 type AnalysisType int32
 
 const (
+	// 未指定分析类型。
 	AnalysisType_ANALYSIS_TYPE_UNSPECIFIED AnalysisType = 0
-	AnalysisType_ANALYSIS_TYPE_EQUIPMENT   AnalysisType = 1
-	AnalysisType_ANALYSIS_TYPE_POSTURE     AnalysisType = 2
+	// 器材识别。
+	AnalysisType_ANALYSIS_TYPE_EQUIPMENT AnalysisType = 1
+	// 姿势分析。
+	AnalysisType_ANALYSIS_TYPE_POSTURE AnalysisType = 2
 )
 
 // Enum value maps for AnalysisType.
@@ -71,14 +75,20 @@ func (AnalysisType) EnumDescriptor() ([]byte, []int) {
 	return file_vision_v1_vision_proto_rawDescGZIP(), []int{0}
 }
 
+// AI 分析任务状态。
 type AnalysisStatus int32
 
 const (
+	// 未指定任务状态。
 	AnalysisStatus_ANALYSIS_STATUS_UNSPECIFIED AnalysisStatus = 0
-	AnalysisStatus_ANALYSIS_STATUS_PENDING     AnalysisStatus = 1
-	AnalysisStatus_ANALYSIS_STATUS_PROCESSING  AnalysisStatus = 2
-	AnalysisStatus_ANALYSIS_STATUS_SUCCEEDED   AnalysisStatus = 3
-	AnalysisStatus_ANALYSIS_STATUS_FAILED      AnalysisStatus = 4
+	// 等待处理。
+	AnalysisStatus_ANALYSIS_STATUS_PENDING AnalysisStatus = 1
+	// 正在处理。
+	AnalysisStatus_ANALYSIS_STATUS_PROCESSING AnalysisStatus = 2
+	// 处理成功。
+	AnalysisStatus_ANALYSIS_STATUS_SUCCEEDED AnalysisStatus = 3
+	// 处理失败。
+	AnalysisStatus_ANALYSIS_STATUS_FAILED AnalysisStatus = 4
 )
 
 // Enum value maps for AnalysisStatus.
@@ -126,10 +136,13 @@ func (AnalysisStatus) EnumDescriptor() ([]byte, []int) {
 	return file_vision_v1_vision_proto_rawDescGZIP(), []int{1}
 }
 
+// 器材识别参数。
 type RecognizeEquipmentRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ImageUri      string                 `protobuf:"bytes,1,opt,name=image_uri,json=imageUri,proto3" json:"image_uri,omitempty"`
-	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 已上传图片的对象存储地址。
+	ImageUri string `protobuf:"bytes,1,opt,name=image_uri,json=imageUri,proto3" json:"image_uri,omitempty"`
+	// 发起任务的系统内部用户 UUID。
+	UserId        string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -178,11 +191,15 @@ func (x *RecognizeEquipmentRequest) GetUserId() string {
 	return ""
 }
 
+// 姿势分析参数。
 type AnalyzePostureRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	VideoUri      string                 `protobuf:"bytes,1,opt,name=video_uri,json=videoUri,proto3" json:"video_uri,omitempty"`
-	ExerciseCode  string                 `protobuf:"bytes,2,opt,name=exercise_code,json=exerciseCode,proto3" json:"exercise_code,omitempty"`
-	UserId        string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 已上传视频的对象存储地址。
+	VideoUri string `protobuf:"bytes,1,opt,name=video_uri,json=videoUri,proto3" json:"video_uri,omitempty"`
+	// 需要分析的标准动作编码。
+	ExerciseCode string `protobuf:"bytes,2,opt,name=exercise_code,json=exerciseCode,proto3" json:"exercise_code,omitempty"`
+	// 发起任务的系统内部用户 UUID。
+	UserId        string `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -238,9 +255,11 @@ func (x *AnalyzePostureRequest) GetUserId() string {
 	return ""
 }
 
+// 查询分析任务参数。
 type GetAnalysisJobRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// AI 分析任务 UUID。
+	JobId         string `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -282,9 +301,11 @@ func (x *GetAnalysisJobRequest) GetJobId() string {
 	return ""
 }
 
+// 创建器材识别任务结果。
 type RecognizeEquipmentResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Job           *AnalysisJob           `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 新创建的异步分析任务。
+	Job           *AnalysisJob `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -326,9 +347,11 @@ func (x *RecognizeEquipmentResponse) GetJob() *AnalysisJob {
 	return nil
 }
 
+// 创建姿势分析任务结果。
 type AnalyzePostureResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Job           *AnalysisJob           `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 新创建的异步分析任务。
+	Job           *AnalysisJob `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -370,9 +393,11 @@ func (x *AnalyzePostureResponse) GetJob() *AnalysisJob {
 	return nil
 }
 
+// 查询分析任务结果。
 type GetAnalysisJobResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Job           *AnalysisJob           `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 当前分析任务。
+	Job           *AnalysisJob `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -414,14 +439,21 @@ func (x *GetAnalysisJobResponse) GetJob() *AnalysisJob {
 	return nil
 }
 
+// AI 异步分析任务。
 type AnalysisJob struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	Type          AnalysisType           `protobuf:"varint,2,opt,name=type,proto3,enum=vision.v1.AnalysisType" json:"type,omitempty"`
-	Status        AnalysisStatus         `protobuf:"varint,3,opt,name=status,proto3,enum=vision.v1.AnalysisStatus" json:"status,omitempty"`
-	MediaUri      string                 `protobuf:"bytes,4,opt,name=media_uri,json=mediaUri,proto3" json:"media_uri,omitempty"`
-	ResultJson    string                 `protobuf:"bytes,5,opt,name=result_json,json=resultJson,proto3" json:"result_json,omitempty"`
-	ErrorMessage  string                 `protobuf:"bytes,6,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 任务 UUID。
+	JobId string `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	// 分析任务类型。
+	Type AnalysisType `protobuf:"varint,2,opt,name=type,proto3,enum=vision.v1.AnalysisType" json:"type,omitempty"`
+	// 当前任务状态。
+	Status AnalysisStatus `protobuf:"varint,3,opt,name=status,proto3,enum=vision.v1.AnalysisStatus" json:"status,omitempty"`
+	// 被分析的图片或视频地址。
+	MediaUri string `protobuf:"bytes,4,opt,name=media_uri,json=mediaUri,proto3" json:"media_uri,omitempty"`
+	// 成功后的结构化 JSON 结果；任务完成前为空。
+	ResultJson string `protobuf:"bytes,5,opt,name=result_json,json=resultJson,proto3" json:"result_json,omitempty"`
+	// 失败原因；任务未失败时为空。
+	ErrorMessage  string `protobuf:"bytes,6,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -502,16 +534,16 @@ var File_vision_v1_vision_proto protoreflect.FileDescriptor
 
 const file_vision_v1_vision_proto_rawDesc = "" +
 	"\n" +
-	"\x16vision/v1/vision.proto\x12\tvision.v1\x1a\x1cgoogle/api/annotations.proto\"Q\n" +
-	"\x19RecognizeEquipmentRequest\x12\x1b\n" +
-	"\timage_uri\x18\x01 \x01(\tR\bimageUri\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\"r\n" +
-	"\x15AnalyzePostureRequest\x12\x1b\n" +
-	"\tvideo_uri\x18\x01 \x01(\tR\bvideoUri\x12#\n" +
-	"\rexercise_code\x18\x02 \x01(\tR\fexerciseCode\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\".\n" +
-	"\x15GetAnalysisJobRequest\x12\x15\n" +
-	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"F\n" +
+	"\x16vision/v1/vision.proto\x12\tvision.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\"[\n" +
+	"\x19RecognizeEquipmentRequest\x12 \n" +
+	"\timage_uri\x18\x01 \x01(\tB\x03\xe0A\x02R\bimageUri\x12\x1c\n" +
+	"\auser_id\x18\x02 \x01(\tB\x03\xe0A\x02R\x06userId\"\x81\x01\n" +
+	"\x15AnalyzePostureRequest\x12 \n" +
+	"\tvideo_uri\x18\x01 \x01(\tB\x03\xe0A\x02R\bvideoUri\x12(\n" +
+	"\rexercise_code\x18\x02 \x01(\tB\x03\xe0A\x02R\fexerciseCode\x12\x1c\n" +
+	"\auser_id\x18\x03 \x01(\tB\x03\xe0A\x02R\x06userId\"3\n" +
+	"\x15GetAnalysisJobRequest\x12\x1a\n" +
+	"\x06job_id\x18\x01 \x01(\tB\x03\xe0A\x02R\x05jobId\"F\n" +
 	"\x1aRecognizeEquipmentResponse\x12(\n" +
 	"\x03job\x18\x01 \x01(\v2\x16.vision.v1.AnalysisJobR\x03job\"B\n" +
 	"\x16AnalyzePostureResponse\x12(\n" +

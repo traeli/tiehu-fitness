@@ -27,9 +27,14 @@ const (
 // ContentServiceClient is the client API for ContentService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// ContentService 提供健身器材和教学动作内容查询能力。
 type ContentServiceClient interface {
+	// GetEquipment 查询已发布的器材详情。
 	GetEquipment(ctx context.Context, in *GetEquipmentRequest, opts ...grpc.CallOption) (*GetEquipmentResponse, error)
+	// RecommendExercises 查询指定器材适用的已发布动作。
 	RecommendExercises(ctx context.Context, in *RecommendExercisesRequest, opts ...grpc.CallOption) (*RecommendExercisesResponse, error)
+	// GetExercise 查询已发布的动作和教学信息。
 	GetExercise(ctx context.Context, in *GetExerciseRequest, opts ...grpc.CallOption) (*GetExerciseResponse, error)
 }
 
@@ -74,9 +79,14 @@ func (c *contentServiceClient) GetExercise(ctx context.Context, in *GetExerciseR
 // ContentServiceServer is the server API for ContentService service.
 // All implementations must embed UnimplementedContentServiceServer
 // for forward compatibility.
+//
+// ContentService 提供健身器材和教学动作内容查询能力。
 type ContentServiceServer interface {
+	// GetEquipment 查询已发布的器材详情。
 	GetEquipment(context.Context, *GetEquipmentRequest) (*GetEquipmentResponse, error)
+	// RecommendExercises 查询指定器材适用的已发布动作。
 	RecommendExercises(context.Context, *RecommendExercisesRequest) (*RecommendExercisesResponse, error)
+	// GetExercise 查询已发布的动作和教学信息。
 	GetExercise(context.Context, *GetExerciseRequest) (*GetExerciseResponse, error)
 	mustEmbedUnimplementedContentServiceServer()
 }

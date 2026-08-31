@@ -1,0 +1,90 @@
+name: tiehu-fitness
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - shared
+  logging:
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: "5"
+
+services:
+  core:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: core
+      args:
+        VERSION: ${APP_VERSION:-dev}
+    image: tiehu-fitness-core:${APP_VERSION:-dev}
+    container_name: tiehu-core
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      CORE_DATABASE_DSN: ${CORE_DATABASE_DSN:?CORE_DATABASE_DSN is required}
+      CORE_REDIS_ADDR: ${REDIS_ADDR:-nutrilens-redis:6379}
+      CORE_REDIS_USERNAME: ${REDIS_USERNAME:-}
+      CORE_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      VISION_GRPC_ENDPOINT: dns:///tiehu-vision:9100
+      UTOOLS_PLUGIN_ID: ${UTOOLS_PLUGIN_ID:?UTOOLS_PLUGIN_ID is required}
+      UTOOLS_PLUGIN_SECRET: ${UTOOLS_PLUGIN_SECRET:?UTOOLS_PLUGIN_SECRET is required}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
+    ports:
+      - "${CORE_BIND_ADDRESS:-127.0.0.1}:${CORE_HTTP_PORT:-8000}:8000"
+    expose:
+      - "9000"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "8000"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 30s
+
+  vision:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: vision
+      args:
+        VERSION: ${APP_VERSION:-dev}
+    image: tiehu-fitness-vision:${APP_VERSION:-dev}
+    container_name: tiehu-vision
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      VISION_DATABASE_DSN: ${VISION_DATABASE_DSN:?VISION_DATABASE_DSN is required}
+      VISION_REDIS_ADDR: ${REDIS_ADDR:-nutrilens-redis:6379}
+      VISION_REDIS_USERNAME: ${REDIS_USERNAME:-}
+      VISION_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CORE_GRPC_ENDPOINT: dns:///tiehu-core:9000
+      REALTIME_WEBSOCKET_URL: ${REALTIME_WEBSOCKET_URL:?REALTIME_WEBSOCKET_URL is required}
+      BAILIAN_ASR_ENDPOINT: ${BAILIAN_ASR_ENDPOINT:-}
+      DEEPSEEK_ENDPOINT: ${DEEPSEEK_ENDPOINT:-https://api.deepseek.com/chat/completions}
+    ports:
+      - "${VISION_BIND_ADDRESS:-127.0.0.1}:${VISION_HTTP_PORT:-8100}:8100"
+    expose:
+      - "9100"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "8100"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 45s
+    stop_grace_period: 45s
+
+networks:
+  shared:
+    external: true
+    name: shared

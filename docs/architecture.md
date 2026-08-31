@@ -6,7 +6,7 @@
 
 | 服务 | 部署资源 | 内部模块 | 拥有的数据 |
 |---|---|---|---|
-| core-service | 普通 CPU 服务器 | identity、session、profile、content、training、engagement | 微信身份、用户、会话、健身档案、器材动作、教学内容、计划、训练记录和打卡 |
+| core-service | 普通 CPU 服务器 | identity、session、profile、content、training、engagement | Web 密码凭证、微信身份、用户、会话、健身档案、器材动作、教学内容、计划、训练记录和打卡 |
 | vision-service | 高性能 CPU/GPU 服务器 | media、equipment-recognition、posture-analysis、model、worker | 媒体资产、分析任务、模型版本、识别结果和姿态结果 |
 
 core-service 是模块化业务服务。用户、内容和训练保持独立 API 与代码模块，但共享一个进程和一套 Kratos HTTP/gRPC Server。
@@ -16,7 +16,7 @@ vision-service 同一进程内运行 HTTP、gRPC 和异步 Worker Pool，不再�
 ## 部署关系
 
 ```text
-WeChat Mini Program
+Web / WeChat Mini Program
         |
    Ingress / API Gateway（基础设施）
         |
@@ -69,6 +69,21 @@ app/core/
         └── server.go
 ```
 
+### Web 注册与登录
+
+```text
+Web 注册
+    -> core-service /v1/auth/register
+    -> 校验并规范化邮箱，生成 bcrypt 密码哈希
+    -> 事务内创建 user + password_credential + 空健身档案
+    -> 签发业务 access_token / refresh_token
+
+Web 登录
+    -> core-service /v1/auth/login
+    -> 查询规范化邮箱并校验 bcrypt 密码
+    -> 签发业务 access_token / refresh_token
+```
+
 ### 微信首次登录
 
 ```text
@@ -81,7 +96,7 @@ app/core/
     -> 返回 is_new_user 与 onboarding_required
 ```
 
-不提供传统注册接口。OpenID 只作为微信身份映射，业务数据统一使用内部 `user_id`。微信 `session_key` 不返回小程序；正式数据层应加密或短期保存。
+微信渠道不提供独立注册接口。OpenID 只作为微信身份映射，业务数据统一使用内部 `user_id`。微信 `session_key` 不返回小程序；正式数据层应加密或短期保存。
 
 ## vision-service
 

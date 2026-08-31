@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="铁虎 AI 会议助手">
+  <defs>
+    <linearGradient id="audio-blue" x1="64" y1="28" x2="96" y2="94" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1477ff"/>
+      <stop offset="1" stop-color="#0754ec"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    d="M56 28H46C26 28 14 42 14 63v3c0 21 12 34 32 34h10"
+    fill="none"
+    stroke="#14252e"
+    stroke-width="12"
+    stroke-linejoin="round"
+  />
+  <path d="M29 95v20l22-16Z" fill="#14252e"/>
+  <path
+    d="M76 28h8c20 0 30 14 30 35v3c0 21-10 34-30 34h-8"
+    fill="none"
+    stroke="#14252e"
+    stroke-width="12"
+    stroke-linejoin="round"
+  />
+
+  <rect x="28" y="57" width="7" height="15" rx="3.5" fill="#14252e"/>
+  <rect x="40" y="50" width="8" height="29" rx="4" fill="#14252e"/>
+  <rect x="52" y="41" width="9" height="47" rx="4.5" fill="#14252e"/>
+  <rect x="65" y="32" width="10" height="65" rx="5" fill="url(#audio-blue)"/>
+  <rect x="79" y="48" width="9" height="33" rx="4.5" fill="url(#audio-blue)"/>
+  <rect x="93" y="57" width="7" height="15" rx="3.5" fill="url(#audio-blue)"/>
+</svg>

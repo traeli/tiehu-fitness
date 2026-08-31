@@ -22,13 +22,19 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 健身器材内容。
 type Equipment struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	EquipmentCode string                 `protobuf:"bytes,1,opt,name=equipment_code,json=equipmentCode,proto3" json:"equipment_code,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	TargetMuscles []string               `protobuf:"bytes,4,rep,name=target_muscles,json=targetMuscles,proto3" json:"target_muscles,omitempty"`
-	SafetyTips    []string               `protobuf:"bytes,5,rep,name=safety_tips,json=safetyTips,proto3" json:"safety_tips,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 稳定且唯一的器材编码。
+	EquipmentCode string `protobuf:"bytes,1,opt,name=equipment_code,json=equipmentCode,proto3" json:"equipment_code,omitempty"`
+	// 器材展示名称。
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 器材用途说明。
+	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// 主要训练肌群。
+	TargetMuscles []string `protobuf:"bytes,4,rep,name=target_muscles,json=targetMuscles,proto3" json:"target_muscles,omitempty"`
+	// 使用器材时的安全提醒。
+	SafetyTips    []string `protobuf:"bytes,5,rep,name=safety_tips,json=safetyTips,proto3" json:"safety_tips,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -98,17 +104,25 @@ func (x *Equipment) GetSafetyTips() []string {
 	return nil
 }
 
+// 健身动作和教学内容。
 type Exercise struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	ExerciseCode        string                 `protobuf:"bytes,1,opt,name=exercise_code,json=exerciseCode,proto3" json:"exercise_code,omitempty"`
-	Name                string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	EquipmentCode       string                 `protobuf:"bytes,3,opt,name=equipment_code,json=equipmentCode,proto3" json:"equipment_code,omitempty"`
-	InstructionVideoUri string                 `protobuf:"bytes,4,opt,name=instruction_video_uri,json=instructionVideoUri,proto3" json:"instruction_video_uri,omitempty"`
-	TargetMuscles       []string               `protobuf:"bytes,5,rep,name=target_muscles,json=targetMuscles,proto3" json:"target_muscles,omitempty"`
-	KeyPoints           []string               `protobuf:"bytes,6,rep,name=key_points,json=keyPoints,proto3" json:"key_points,omitempty"`
-	CommonMistakes      []string               `protobuf:"bytes,7,rep,name=common_mistakes,json=commonMistakes,proto3" json:"common_mistakes,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 稳定且唯一的动作编码。
+	ExerciseCode string `protobuf:"bytes,1,opt,name=exercise_code,json=exerciseCode,proto3" json:"exercise_code,omitempty"`
+	// 动作展示名称。
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 动作使用的器材编码。
+	EquipmentCode string `protobuf:"bytes,3,opt,name=equipment_code,json=equipmentCode,proto3" json:"equipment_code,omitempty"`
+	// 教学视频资源地址。
+	InstructionVideoUri string `protobuf:"bytes,4,opt,name=instruction_video_uri,json=instructionVideoUri,proto3" json:"instruction_video_uri,omitempty"`
+	// 动作主要训练肌群。
+	TargetMuscles []string `protobuf:"bytes,5,rep,name=target_muscles,json=targetMuscles,proto3" json:"target_muscles,omitempty"`
+	// 动作执行要点。
+	KeyPoints []string `protobuf:"bytes,6,rep,name=key_points,json=keyPoints,proto3" json:"key_points,omitempty"`
+	// 常见错误动作。
+	CommonMistakes []string `protobuf:"bytes,7,rep,name=common_mistakes,json=commonMistakes,proto3" json:"common_mistakes,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Exercise) Reset() {
@@ -190,9 +204,11 @@ func (x *Exercise) GetCommonMistakes() []string {
 	return nil
 }
 
+// 查询器材参数。
 type GetEquipmentRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	EquipmentCode string                 `protobuf:"bytes,1,opt,name=equipment_code,json=equipmentCode,proto3" json:"equipment_code,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 器材编码。
+	EquipmentCode string `protobuf:"bytes,1,opt,name=equipment_code,json=equipmentCode,proto3" json:"equipment_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -234,9 +250,11 @@ func (x *GetEquipmentRequest) GetEquipmentCode() string {
 	return ""
 }
 
+// 查询器材结果。
 type GetEquipmentResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Equipment     *Equipment             `protobuf:"bytes,1,opt,name=equipment,proto3" json:"equipment,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 指定器材详情。
+	Equipment     *Equipment `protobuf:"bytes,1,opt,name=equipment,proto3" json:"equipment,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -278,9 +296,11 @@ func (x *GetEquipmentResponse) GetEquipment() *Equipment {
 	return nil
 }
 
+// 推荐动作参数。
 type RecommendExercisesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	EquipmentCode string                 `protobuf:"bytes,1,opt,name=equipment_code,json=equipmentCode,proto3" json:"equipment_code,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 器材编码。
+	EquipmentCode string `protobuf:"bytes,1,opt,name=equipment_code,json=equipmentCode,proto3" json:"equipment_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -322,9 +342,11 @@ func (x *RecommendExercisesRequest) GetEquipmentCode() string {
 	return ""
 }
 
+// 推荐动作结果。
 type RecommendExercisesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Exercises     []*Exercise            `protobuf:"bytes,1,rep,name=exercises,proto3" json:"exercises,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 适用于指定器材的动作列表。
+	Exercises     []*Exercise `protobuf:"bytes,1,rep,name=exercises,proto3" json:"exercises,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -366,9 +388,11 @@ func (x *RecommendExercisesResponse) GetExercises() []*Exercise {
 	return nil
 }
 
+// 查询动作参数。
 type GetExerciseRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ExerciseCode  string                 `protobuf:"bytes,1,opt,name=exercise_code,json=exerciseCode,proto3" json:"exercise_code,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 动作编码。
+	ExerciseCode  string `protobuf:"bytes,1,opt,name=exercise_code,json=exerciseCode,proto3" json:"exercise_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -410,9 +434,11 @@ func (x *GetExerciseRequest) GetExerciseCode() string {
 	return ""
 }
 
+// 查询动作结果。
 type GetExerciseResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Exercise      *Exercise              `protobuf:"bytes,1,opt,name=exercise,proto3" json:"exercise,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 指定动作详情。
+	Exercise      *Exercise `protobuf:"bytes,1,opt,name=exercise,proto3" json:"exercise,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -459,7 +485,7 @@ var File_content_v1_content_proto protoreflect.FileDescriptor
 const file_content_v1_content_proto_rawDesc = "" +
 	"\n" +
 	"\x18content/v1/content.proto\x12\n" +
-	"content.v1\x1a\x1cgoogle/api/annotations.proto\"\xb0\x01\n" +
+	"content.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\"\xb0\x01\n" +
 	"\tEquipment\x12%\n" +
 	"\x0eequipment_code\x18\x01 \x01(\tR\requipmentCode\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -475,17 +501,17 @@ const file_content_v1_content_proto_rawDesc = "" +
 	"\x0etarget_muscles\x18\x05 \x03(\tR\rtargetMuscles\x12\x1d\n" +
 	"\n" +
 	"key_points\x18\x06 \x03(\tR\tkeyPoints\x12'\n" +
-	"\x0fcommon_mistakes\x18\a \x03(\tR\x0ecommonMistakes\"<\n" +
-	"\x13GetEquipmentRequest\x12%\n" +
-	"\x0eequipment_code\x18\x01 \x01(\tR\requipmentCode\"K\n" +
+	"\x0fcommon_mistakes\x18\a \x03(\tR\x0ecommonMistakes\"A\n" +
+	"\x13GetEquipmentRequest\x12*\n" +
+	"\x0eequipment_code\x18\x01 \x01(\tB\x03\xe0A\x02R\requipmentCode\"K\n" +
 	"\x14GetEquipmentResponse\x123\n" +
-	"\tequipment\x18\x01 \x01(\v2\x15.content.v1.EquipmentR\tequipment\"B\n" +
-	"\x19RecommendExercisesRequest\x12%\n" +
-	"\x0eequipment_code\x18\x01 \x01(\tR\requipmentCode\"P\n" +
+	"\tequipment\x18\x01 \x01(\v2\x15.content.v1.EquipmentR\tequipment\"G\n" +
+	"\x19RecommendExercisesRequest\x12*\n" +
+	"\x0eequipment_code\x18\x01 \x01(\tB\x03\xe0A\x02R\requipmentCode\"P\n" +
 	"\x1aRecommendExercisesResponse\x122\n" +
-	"\texercises\x18\x01 \x03(\v2\x14.content.v1.ExerciseR\texercises\"9\n" +
-	"\x12GetExerciseRequest\x12#\n" +
-	"\rexercise_code\x18\x01 \x01(\tR\fexerciseCode\"G\n" +
+	"\texercises\x18\x01 \x03(\v2\x14.content.v1.ExerciseR\texercises\">\n" +
+	"\x12GetExerciseRequest\x12(\n" +
+	"\rexercise_code\x18\x01 \x01(\tB\x03\xe0A\x02R\fexerciseCode\"G\n" +
 	"\x13GetExerciseResponse\x120\n" +
 	"\bexercise\x18\x01 \x01(\v2\x14.content.v1.ExerciseR\bexercise2\x9a\x03\n" +
 	"\x0eContentService\x12y\n" +

@@ -22,17 +22,321 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Web 用户注册参数。
+type RegisterRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 登录邮箱；忽略首尾空格和大小写，必须是完整的公网邮箱地址。
+	Email string `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	// 登录密码，长度为 8 到 72 字节。
+	Password string `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	// 用户展示昵称；为空时使用邮箱 @ 前的本地部分。
+	Nickname string `protobuf:"bytes,3,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	// Web 端生成的设备标识，用于区分登录设备。
+	DeviceId      string `protobuf:"bytes,4,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterRequest) Reset() {
+	*x = RegisterRequest{}
+	mi := &file_user_v1_user_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterRequest) ProtoMessage() {}
+
+func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
+func (*RegisterRequest) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *RegisterRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetDeviceId() string {
+	if x != nil {
+		return x.DeviceId
+	}
+	return ""
+}
+
+// Web 用户登录参数。
+type LoginRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 注册时使用的邮箱；忽略首尾空格和大小写。
+	Email string `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	// 登录密码。
+	Password string `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	// Web 端生成的设备标识，用于区分登录设备。
+	DeviceId      string `protobuf:"bytes,3,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LoginRequest) Reset() {
+	*x = LoginRequest{}
+	mi := &file_user_v1_user_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LoginRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LoginRequest) ProtoMessage() {}
+
+func (x *LoginRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
+func (*LoginRequest) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *LoginRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *LoginRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+func (x *LoginRequest) GetDeviceId() string {
+	if x != nil {
+		return x.DeviceId
+	}
+	return ""
+}
+
+// Web 注册结果。
+type RegisterResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 调用业务接口使用的访问令牌。
+	AccessToken string `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	// 换取新访问令牌使用的刷新令牌。
+	RefreshToken string `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	// 访问令牌剩余有效秒数。
+	ExpiresInSeconds int64 `protobuf:"varint,3,opt,name=expires_in_seconds,json=expiresInSeconds,proto3" json:"expires_in_seconds,omitempty"`
+	// 当前登录用户。
+	User *User `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
+	// 是否需要完成健身档案引导。
+	OnboardingRequired bool `protobuf:"varint,5,opt,name=onboarding_required,json=onboardingRequired,proto3" json:"onboarding_required,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *RegisterResponse) Reset() {
+	*x = RegisterResponse{}
+	mi := &file_user_v1_user_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterResponse) ProtoMessage() {}
+
+func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
+func (*RegisterResponse) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RegisterResponse) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
+func (x *RegisterResponse) GetRefreshToken() string {
+	if x != nil {
+		return x.RefreshToken
+	}
+	return ""
+}
+
+func (x *RegisterResponse) GetExpiresInSeconds() int64 {
+	if x != nil {
+		return x.ExpiresInSeconds
+	}
+	return 0
+}
+
+func (x *RegisterResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+func (x *RegisterResponse) GetOnboardingRequired() bool {
+	if x != nil {
+		return x.OnboardingRequired
+	}
+	return false
+}
+
+// Web 登录结果。
+type LoginResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 调用业务接口使用的访问令牌。
+	AccessToken string `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	// 换取新访问令牌使用的刷新令牌。
+	RefreshToken string `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	// 访问令牌剩余有效秒数。
+	ExpiresInSeconds int64 `protobuf:"varint,3,opt,name=expires_in_seconds,json=expiresInSeconds,proto3" json:"expires_in_seconds,omitempty"`
+	// 当前登录用户。
+	User *User `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
+	// 是否需要完成健身档案引导。
+	OnboardingRequired bool `protobuf:"varint,5,opt,name=onboarding_required,json=onboardingRequired,proto3" json:"onboarding_required,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *LoginResponse) Reset() {
+	*x = LoginResponse{}
+	mi := &file_user_v1_user_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LoginResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LoginResponse) ProtoMessage() {}
+
+func (x *LoginResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LoginResponse.ProtoReflect.Descriptor instead.
+func (*LoginResponse) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *LoginResponse) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
+func (x *LoginResponse) GetRefreshToken() string {
+	if x != nil {
+		return x.RefreshToken
+	}
+	return ""
+}
+
+func (x *LoginResponse) GetExpiresInSeconds() int64 {
+	if x != nil {
+		return x.ExpiresInSeconds
+	}
+	return 0
+}
+
+func (x *LoginResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+func (x *LoginResponse) GetOnboardingRequired() bool {
+	if x != nil {
+		return x.OnboardingRequired
+	}
+	return false
+}
+
+// 微信登录参数。
 type WechatLoginRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
-	DeviceId      string                 `protobuf:"bytes,2,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// wx.login 返回的一次性临时凭证。
+	Code string `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	// 小程序侧生成的设备标识，用于区分登录设备。
+	DeviceId      string `protobuf:"bytes,2,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WechatLoginRequest) Reset() {
 	*x = WechatLoginRequest{}
-	mi := &file_user_v1_user_proto_msgTypes[0]
+	mi := &file_user_v1_user_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +348,7 @@ func (x *WechatLoginRequest) String() string {
 func (*WechatLoginRequest) ProtoMessage() {}
 
 func (x *WechatLoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[0]
+	mi := &file_user_v1_user_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +361,7 @@ func (x *WechatLoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WechatLoginRequest.ProtoReflect.Descriptor instead.
 func (*WechatLoginRequest) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{0}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *WechatLoginRequest) GetCode() string {
@@ -74,21 +378,28 @@ func (x *WechatLoginRequest) GetDeviceId() string {
 	return ""
 }
 
+// 微信登录结果。
 type WechatLoginResponse struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	AccessToken        string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
-	RefreshToken       string                 `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
-	ExpiresInSeconds   int64                  `protobuf:"varint,3,opt,name=expires_in_seconds,json=expiresInSeconds,proto3" json:"expires_in_seconds,omitempty"`
-	User               *User                  `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
-	IsNewUser          bool                   `protobuf:"varint,5,opt,name=is_new_user,json=isNewUser,proto3" json:"is_new_user,omitempty"`
-	OnboardingRequired bool                   `protobuf:"varint,6,opt,name=onboarding_required,json=onboardingRequired,proto3" json:"onboarding_required,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 调用业务接口使用的访问令牌。
+	AccessToken string `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	// 换取新访问令牌使用的刷新令牌。
+	RefreshToken string `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	// 访问令牌剩余有效秒数。
+	ExpiresInSeconds int64 `protobuf:"varint,3,opt,name=expires_in_seconds,json=expiresInSeconds,proto3" json:"expires_in_seconds,omitempty"`
+	// 当前登录用户。
+	User *User `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
+	// 是否为该微信用户首次登录。
+	IsNewUser bool `protobuf:"varint,5,opt,name=is_new_user,json=isNewUser,proto3" json:"is_new_user,omitempty"`
+	// 是否需要完成健身档案引导。
+	OnboardingRequired bool `protobuf:"varint,6,opt,name=onboarding_required,json=onboardingRequired,proto3" json:"onboarding_required,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
 func (x *WechatLoginResponse) Reset() {
 	*x = WechatLoginResponse{}
-	mi := &file_user_v1_user_proto_msgTypes[1]
+	mi := &file_user_v1_user_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -100,7 +411,7 @@ func (x *WechatLoginResponse) String() string {
 func (*WechatLoginResponse) ProtoMessage() {}
 
 func (x *WechatLoginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[1]
+	mi := &file_user_v1_user_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -113,7 +424,7 @@ func (x *WechatLoginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WechatLoginResponse.ProtoReflect.Descriptor instead.
 func (*WechatLoginResponse) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{1}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *WechatLoginResponse) GetAccessToken() string {
@@ -158,16 +469,164 @@ func (x *WechatLoginResponse) GetOnboardingRequired() bool {
 	return false
 }
 
+// uTools 登录参数。
+type UToolsLoginRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// utools.fetchUserServerTemporaryToken 返回的一次性临时令牌。
+	TemporaryToken string `protobuf:"bytes,1,opt,name=temporary_token,json=temporaryToken,proto3" json:"temporary_token,omitempty"`
+	// 插件侧生成并持久化在本机的非敏感设备标识。
+	DeviceId      string `protobuf:"bytes,2,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UToolsLoginRequest) Reset() {
+	*x = UToolsLoginRequest{}
+	mi := &file_user_v1_user_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UToolsLoginRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UToolsLoginRequest) ProtoMessage() {}
+
+func (x *UToolsLoginRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UToolsLoginRequest.ProtoReflect.Descriptor instead.
+func (*UToolsLoginRequest) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UToolsLoginRequest) GetTemporaryToken() string {
+	if x != nil {
+		return x.TemporaryToken
+	}
+	return ""
+}
+
+func (x *UToolsLoginRequest) GetDeviceId() string {
+	if x != nil {
+		return x.DeviceId
+	}
+	return ""
+}
+
+// uTools 登录结果。
+type UToolsLoginResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 调用业务接口使用的访问令牌。
+	AccessToken string `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	// 换取新访问令牌使用的刷新令牌。
+	RefreshToken string `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	// 访问令牌剩余有效秒数。
+	ExpiresInSeconds int64 `protobuf:"varint,3,opt,name=expires_in_seconds,json=expiresInSeconds,proto3" json:"expires_in_seconds,omitempty"`
+	// 当前登录用户。
+	User *User `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
+	// 是否为该 uTools 用户首次登录。
+	IsNewUser bool `protobuf:"varint,5,opt,name=is_new_user,json=isNewUser,proto3" json:"is_new_user,omitempty"`
+	// 是否需要完成健身档案引导。
+	OnboardingRequired bool `protobuf:"varint,6,opt,name=onboarding_required,json=onboardingRequired,proto3" json:"onboarding_required,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *UToolsLoginResponse) Reset() {
+	*x = UToolsLoginResponse{}
+	mi := &file_user_v1_user_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UToolsLoginResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UToolsLoginResponse) ProtoMessage() {}
+
+func (x *UToolsLoginResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UToolsLoginResponse.ProtoReflect.Descriptor instead.
+func (*UToolsLoginResponse) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *UToolsLoginResponse) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
+func (x *UToolsLoginResponse) GetRefreshToken() string {
+	if x != nil {
+		return x.RefreshToken
+	}
+	return ""
+}
+
+func (x *UToolsLoginResponse) GetExpiresInSeconds() int64 {
+	if x != nil {
+		return x.ExpiresInSeconds
+	}
+	return 0
+}
+
+func (x *UToolsLoginResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+func (x *UToolsLoginResponse) GetIsNewUser() bool {
+	if x != nil {
+		return x.IsNewUser
+	}
+	return false
+}
+
+func (x *UToolsLoginResponse) GetOnboardingRequired() bool {
+	if x != nil {
+		return x.OnboardingRequired
+	}
+	return false
+}
+
+// 刷新令牌参数。
 type RefreshTokenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RefreshToken  string                 `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 登录或上一次刷新返回的刷新令牌。
+	RefreshToken  string `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RefreshTokenRequest) Reset() {
 	*x = RefreshTokenRequest{}
-	mi := &file_user_v1_user_proto_msgTypes[2]
+	mi := &file_user_v1_user_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -179,7 +638,7 @@ func (x *RefreshTokenRequest) String() string {
 func (*RefreshTokenRequest) ProtoMessage() {}
 
 func (x *RefreshTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[2]
+	mi := &file_user_v1_user_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -192,7 +651,7 @@ func (x *RefreshTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTokenRequest.ProtoReflect.Descriptor instead.
 func (*RefreshTokenRequest) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{2}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RefreshTokenRequest) GetRefreshToken() string {
@@ -202,18 +661,22 @@ func (x *RefreshTokenRequest) GetRefreshToken() string {
 	return ""
 }
 
+// 刷新令牌结果。
 type RefreshTokenResponse struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	AccessToken      string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
-	RefreshToken     string                 `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
-	ExpiresInSeconds int64                  `protobuf:"varint,3,opt,name=expires_in_seconds,json=expiresInSeconds,proto3" json:"expires_in_seconds,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 新访问令牌。
+	AccessToken string `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	// 新刷新令牌，旧刷新令牌立即失效。
+	RefreshToken string `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	// 新访问令牌剩余有效秒数。
+	ExpiresInSeconds int64 `protobuf:"varint,3,opt,name=expires_in_seconds,json=expiresInSeconds,proto3" json:"expires_in_seconds,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RefreshTokenResponse) Reset() {
 	*x = RefreshTokenResponse{}
-	mi := &file_user_v1_user_proto_msgTypes[3]
+	mi := &file_user_v1_user_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -225,7 +688,7 @@ func (x *RefreshTokenResponse) String() string {
 func (*RefreshTokenResponse) ProtoMessage() {}
 
 func (x *RefreshTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[3]
+	mi := &file_user_v1_user_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -238,7 +701,7 @@ func (x *RefreshTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTokenResponse.ProtoReflect.Descriptor instead.
 func (*RefreshTokenResponse) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{3}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RefreshTokenResponse) GetAccessToken() string {
@@ -262,16 +725,18 @@ func (x *RefreshTokenResponse) GetExpiresInSeconds() int64 {
 	return 0
 }
 
+// 退出登录参数。
 type LogoutRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RefreshToken  string                 `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 需要撤销的刷新令牌。
+	RefreshToken  string `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LogoutRequest) Reset() {
 	*x = LogoutRequest{}
-	mi := &file_user_v1_user_proto_msgTypes[4]
+	mi := &file_user_v1_user_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -283,7 +748,7 @@ func (x *LogoutRequest) String() string {
 func (*LogoutRequest) ProtoMessage() {}
 
 func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[4]
+	mi := &file_user_v1_user_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -296,7 +761,7 @@ func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
 func (*LogoutRequest) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{4}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *LogoutRequest) GetRefreshToken() string {
@@ -306,6 +771,7 @@ func (x *LogoutRequest) GetRefreshToken() string {
 	return ""
 }
 
+// 退出登录结果，无响应字段。
 type LogoutResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -314,7 +780,7 @@ type LogoutResponse struct {
 
 func (x *LogoutResponse) Reset() {
 	*x = LogoutResponse{}
-	mi := &file_user_v1_user_proto_msgTypes[5]
+	mi := &file_user_v1_user_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -326,7 +792,7 @@ func (x *LogoutResponse) String() string {
 func (*LogoutResponse) ProtoMessage() {}
 
 func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[5]
+	mi := &file_user_v1_user_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -339,22 +805,27 @@ func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutResponse.ProtoReflect.Descriptor instead.
 func (*LogoutResponse) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{5}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{11}
 }
 
+// 用户基本信息。
 type User struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Nickname      string                 `protobuf:"bytes,2,opt,name=nickname,proto3" json:"nickname,omitempty"`
-	AvatarUri     string                 `protobuf:"bytes,3,opt,name=avatar_uri,json=avatarUri,proto3" json:"avatar_uri,omitempty"`
-	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 系统内部用户 UUID。
+	UserId string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// 用户展示昵称。
+	Nickname string `protobuf:"bytes,2,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	// 用户头像资源地址。
+	AvatarUri string `protobuf:"bytes,3,opt,name=avatar_uri,json=avatarUri,proto3" json:"avatar_uri,omitempty"`
+	// 用户状态，例如 active、disabled。
+	Status        string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *User) Reset() {
 	*x = User{}
-	mi := &file_user_v1_user_proto_msgTypes[6]
+	mi := &file_user_v1_user_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -366,7 +837,7 @@ func (x *User) String() string {
 func (*User) ProtoMessage() {}
 
 func (x *User) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[6]
+	mi := &file_user_v1_user_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -379,7 +850,7 @@ func (x *User) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use User.ProtoReflect.Descriptor instead.
 func (*User) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{6}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *User) GetUserId() string {
@@ -410,23 +881,32 @@ func (x *User) GetStatus() string {
 	return ""
 }
 
+// 用户健身目标和训练偏好。
 type FitnessProfile struct {
-	state                   protoimpl.MessageState `protogen:"open.v1"`
-	UserId                  string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Goal                    string                 `protobuf:"bytes,2,opt,name=goal,proto3" json:"goal,omitempty"`
-	ExperienceLevel         string                 `protobuf:"bytes,3,opt,name=experience_level,json=experienceLevel,proto3" json:"experience_level,omitempty"`
-	DaysPerWeek             int32                  `protobuf:"varint,4,opt,name=days_per_week,json=daysPerWeek,proto3" json:"days_per_week,omitempty"`
-	DurationMinutes         int32                  `protobuf:"varint,5,opt,name=duration_minutes,json=durationMinutes,proto3" json:"duration_minutes,omitempty"`
-	AvailableEquipmentCodes []string               `protobuf:"bytes,6,rep,name=available_equipment_codes,json=availableEquipmentCodes,proto3" json:"available_equipment_codes,omitempty"`
-	InjuryNotes             []string               `protobuf:"bytes,7,rep,name=injury_notes,json=injuryNotes,proto3" json:"injury_notes,omitempty"`
-	OnboardingCompleted     bool                   `protobuf:"varint,8,opt,name=onboarding_completed,json=onboardingCompleted,proto3" json:"onboarding_completed,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 系统内部用户 UUID。
+	UserId string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// 健身目标，例如增肌、减脂、塑形。
+	Goal string `protobuf:"bytes,2,opt,name=goal,proto3" json:"goal,omitempty"`
+	// 训练经验等级，例如 beginner、intermediate、advanced。
+	ExperienceLevel string `protobuf:"bytes,3,opt,name=experience_level,json=experienceLevel,proto3" json:"experience_level,omitempty"`
+	// 每周计划训练天数，范围 0 到 7。
+	DaysPerWeek int32 `protobuf:"varint,4,opt,name=days_per_week,json=daysPerWeek,proto3" json:"days_per_week,omitempty"`
+	// 单次计划训练分钟数，不能为负数。
+	DurationMinutes int32 `protobuf:"varint,5,opt,name=duration_minutes,json=durationMinutes,proto3" json:"duration_minutes,omitempty"`
+	// 用户可使用的器材编码列表。
+	AvailableEquipmentCodes []string `protobuf:"bytes,6,rep,name=available_equipment_codes,json=availableEquipmentCodes,proto3" json:"available_equipment_codes,omitempty"`
+	// 伤病或动作限制说明。
+	InjuryNotes []string `protobuf:"bytes,7,rep,name=injury_notes,json=injuryNotes,proto3" json:"injury_notes,omitempty"`
+	// 是否已完成首次健身档案引导。
+	OnboardingCompleted bool `protobuf:"varint,8,opt,name=onboarding_completed,json=onboardingCompleted,proto3" json:"onboarding_completed,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *FitnessProfile) Reset() {
 	*x = FitnessProfile{}
-	mi := &file_user_v1_user_proto_msgTypes[7]
+	mi := &file_user_v1_user_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -438,7 +918,7 @@ func (x *FitnessProfile) String() string {
 func (*FitnessProfile) ProtoMessage() {}
 
 func (x *FitnessProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[7]
+	mi := &file_user_v1_user_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -451,7 +931,7 @@ func (x *FitnessProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FitnessProfile.ProtoReflect.Descriptor instead.
 func (*FitnessProfile) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{7}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *FitnessProfile) GetUserId() string {
@@ -510,16 +990,18 @@ func (x *FitnessProfile) GetOnboardingCompleted() bool {
 	return false
 }
 
+// 查询健身档案参数。
 type GetFitnessProfileRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 系统内部用户 UUID。
+	UserId        string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetFitnessProfileRequest) Reset() {
 	*x = GetFitnessProfileRequest{}
-	mi := &file_user_v1_user_proto_msgTypes[8]
+	mi := &file_user_v1_user_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -531,7 +1013,7 @@ func (x *GetFitnessProfileRequest) String() string {
 func (*GetFitnessProfileRequest) ProtoMessage() {}
 
 func (x *GetFitnessProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[8]
+	mi := &file_user_v1_user_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -544,7 +1026,7 @@ func (x *GetFitnessProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFitnessProfileRequest.ProtoReflect.Descriptor instead.
 func (*GetFitnessProfileRequest) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{8}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetFitnessProfileRequest) GetUserId() string {
@@ -554,16 +1036,18 @@ func (x *GetFitnessProfileRequest) GetUserId() string {
 	return ""
 }
 
+// 查询健身档案结果。
 type GetFitnessProfileResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Profile       *FitnessProfile        `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 用户健身档案。
+	Profile       *FitnessProfile `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetFitnessProfileResponse) Reset() {
 	*x = GetFitnessProfileResponse{}
-	mi := &file_user_v1_user_proto_msgTypes[9]
+	mi := &file_user_v1_user_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -575,7 +1059,7 @@ func (x *GetFitnessProfileResponse) String() string {
 func (*GetFitnessProfileResponse) ProtoMessage() {}
 
 func (x *GetFitnessProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[9]
+	mi := &file_user_v1_user_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -588,7 +1072,7 @@ func (x *GetFitnessProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFitnessProfileResponse.ProtoReflect.Descriptor instead.
 func (*GetFitnessProfileResponse) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{9}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetFitnessProfileResponse) GetProfile() *FitnessProfile {
@@ -598,16 +1082,20 @@ func (x *GetFitnessProfileResponse) GetProfile() *FitnessProfile {
 	return nil
 }
 
+// 更新健身档案参数。
 type UpdateFitnessProfileRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Profile       *FitnessProfile        `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 需要保存的健身档案。
+	Profile *FitnessProfile `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	// 路径中的系统内部用户 UUID。
+	UserId        string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateFitnessProfileRequest) Reset() {
 	*x = UpdateFitnessProfileRequest{}
-	mi := &file_user_v1_user_proto_msgTypes[10]
+	mi := &file_user_v1_user_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -619,7 +1107,7 @@ func (x *UpdateFitnessProfileRequest) String() string {
 func (*UpdateFitnessProfileRequest) ProtoMessage() {}
 
 func (x *UpdateFitnessProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[10]
+	mi := &file_user_v1_user_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -632,7 +1120,7 @@ func (x *UpdateFitnessProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateFitnessProfileRequest.ProtoReflect.Descriptor instead.
 func (*UpdateFitnessProfileRequest) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{10}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UpdateFitnessProfileRequest) GetProfile() *FitnessProfile {
@@ -642,16 +1130,25 @@ func (x *UpdateFitnessProfileRequest) GetProfile() *FitnessProfile {
 	return nil
 }
 
+func (x *UpdateFitnessProfileRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// 更新健身档案结果。
 type UpdateFitnessProfileResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Profile       *FitnessProfile        `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 更新后的用户健身档案。
+	Profile       *FitnessProfile `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateFitnessProfileResponse) Reset() {
 	*x = UpdateFitnessProfileResponse{}
-	mi := &file_user_v1_user_proto_msgTypes[11]
+	mi := &file_user_v1_user_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -663,7 +1160,7 @@ func (x *UpdateFitnessProfileResponse) String() string {
 func (*UpdateFitnessProfileResponse) ProtoMessage() {}
 
 func (x *UpdateFitnessProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[11]
+	mi := &file_user_v1_user_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -676,7 +1173,7 @@ func (x *UpdateFitnessProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateFitnessProfileResponse.ProtoReflect.Descriptor instead.
 func (*UpdateFitnessProfileResponse) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{11}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *UpdateFitnessProfileResponse) GetProfile() *FitnessProfile {
@@ -686,16 +1183,18 @@ func (x *UpdateFitnessProfileResponse) GetProfile() *FitnessProfile {
 	return nil
 }
 
+// 生成训练计划参数。
 type GenerateWorkoutPlanRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 系统内部用户 UUID。
+	UserId        string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GenerateWorkoutPlanRequest) Reset() {
 	*x = GenerateWorkoutPlanRequest{}
-	mi := &file_user_v1_user_proto_msgTypes[12]
+	mi := &file_user_v1_user_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -707,7 +1206,7 @@ func (x *GenerateWorkoutPlanRequest) String() string {
 func (*GenerateWorkoutPlanRequest) ProtoMessage() {}
 
 func (x *GenerateWorkoutPlanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[12]
+	mi := &file_user_v1_user_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -720,7 +1219,7 @@ func (x *GenerateWorkoutPlanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateWorkoutPlanRequest.ProtoReflect.Descriptor instead.
 func (*GenerateWorkoutPlanRequest) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{12}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GenerateWorkoutPlanRequest) GetUserId() string {
@@ -730,19 +1229,24 @@ func (x *GenerateWorkoutPlanRequest) GetUserId() string {
 	return ""
 }
 
+// 用户训练计划摘要。
 type WorkoutPlan struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlanId        string                 `protobuf:"bytes,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
-	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Goal          string                 `protobuf:"bytes,3,opt,name=goal,proto3" json:"goal,omitempty"`
-	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 训练计划 UUID。
+	PlanId string `protobuf:"bytes,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	// 计划所属用户 UUID。
+	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// 生成计划时使用的健身目标。
+	Goal string `protobuf:"bytes,3,opt,name=goal,proto3" json:"goal,omitempty"`
+	// 计划状态，例如 draft、active、completed、cancelled。
+	Status        string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WorkoutPlan) Reset() {
 	*x = WorkoutPlan{}
-	mi := &file_user_v1_user_proto_msgTypes[13]
+	mi := &file_user_v1_user_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -754,7 +1258,7 @@ func (x *WorkoutPlan) String() string {
 func (*WorkoutPlan) ProtoMessage() {}
 
 func (x *WorkoutPlan) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[13]
+	mi := &file_user_v1_user_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -767,7 +1271,7 @@ func (x *WorkoutPlan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkoutPlan.ProtoReflect.Descriptor instead.
 func (*WorkoutPlan) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{13}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *WorkoutPlan) GetPlanId() string {
@@ -798,16 +1302,18 @@ func (x *WorkoutPlan) GetStatus() string {
 	return ""
 }
 
+// 生成训练计划结果。
 type GenerateWorkoutPlanResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Plan          *WorkoutPlan           `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 新生成的训练计划。
+	Plan          *WorkoutPlan `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GenerateWorkoutPlanResponse) Reset() {
 	*x = GenerateWorkoutPlanResponse{}
-	mi := &file_user_v1_user_proto_msgTypes[14]
+	mi := &file_user_v1_user_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -819,7 +1325,7 @@ func (x *GenerateWorkoutPlanResponse) String() string {
 func (*GenerateWorkoutPlanResponse) ProtoMessage() {}
 
 func (x *GenerateWorkoutPlanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[14]
+	mi := &file_user_v1_user_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -832,7 +1338,7 @@ func (x *GenerateWorkoutPlanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateWorkoutPlanResponse.ProtoReflect.Descriptor instead.
 func (*GenerateWorkoutPlanResponse) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{14}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GenerateWorkoutPlanResponse) GetPlan() *WorkoutPlan {
@@ -842,17 +1348,20 @@ func (x *GenerateWorkoutPlanResponse) GetPlan() *WorkoutPlan {
 	return nil
 }
 
+// 查询训练计划参数。
 type GetWorkoutPlanRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	PlanId        string                 `protobuf:"bytes,2,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 系统内部用户 UUID。
+	UserId string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// 训练计划 UUID。
+	PlanId        string `protobuf:"bytes,2,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetWorkoutPlanRequest) Reset() {
 	*x = GetWorkoutPlanRequest{}
-	mi := &file_user_v1_user_proto_msgTypes[15]
+	mi := &file_user_v1_user_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -864,7 +1373,7 @@ func (x *GetWorkoutPlanRequest) String() string {
 func (*GetWorkoutPlanRequest) ProtoMessage() {}
 
 func (x *GetWorkoutPlanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[15]
+	mi := &file_user_v1_user_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -877,7 +1386,7 @@ func (x *GetWorkoutPlanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkoutPlanRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkoutPlanRequest) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{15}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetWorkoutPlanRequest) GetUserId() string {
@@ -894,16 +1403,18 @@ func (x *GetWorkoutPlanRequest) GetPlanId() string {
 	return ""
 }
 
+// 查询训练计划结果。
 type GetWorkoutPlanResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Plan          *WorkoutPlan           `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 指定的训练计划。
+	Plan          *WorkoutPlan `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetWorkoutPlanResponse) Reset() {
 	*x = GetWorkoutPlanResponse{}
-	mi := &file_user_v1_user_proto_msgTypes[16]
+	mi := &file_user_v1_user_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -915,7 +1426,7 @@ func (x *GetWorkoutPlanResponse) String() string {
 func (*GetWorkoutPlanResponse) ProtoMessage() {}
 
 func (x *GetWorkoutPlanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[16]
+	mi := &file_user_v1_user_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -928,7 +1439,7 @@ func (x *GetWorkoutPlanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkoutPlanResponse.ProtoReflect.Descriptor instead.
 func (*GetWorkoutPlanResponse) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{16}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetWorkoutPlanResponse) GetPlan() *WorkoutPlan {
@@ -938,16 +1449,18 @@ func (x *GetWorkoutPlanResponse) GetPlan() *WorkoutPlan {
 	return nil
 }
 
+// 每日打卡参数。
 type CheckInRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 系统内部用户 UUID。
+	UserId        string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CheckInRequest) Reset() {
 	*x = CheckInRequest{}
-	mi := &file_user_v1_user_proto_msgTypes[17]
+	mi := &file_user_v1_user_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -959,7 +1472,7 @@ func (x *CheckInRequest) String() string {
 func (*CheckInRequest) ProtoMessage() {}
 
 func (x *CheckInRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[17]
+	mi := &file_user_v1_user_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -972,7 +1485,7 @@ func (x *CheckInRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckInRequest.ProtoReflect.Descriptor instead.
 func (*CheckInRequest) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{17}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CheckInRequest) GetUserId() string {
@@ -982,16 +1495,18 @@ func (x *CheckInRequest) GetUserId() string {
 	return ""
 }
 
+// 每日打卡结果。
 type CheckInResponse struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	CurrentStreakDays int32                  `protobuf:"varint,1,opt,name=current_streak_days,json=currentStreakDays,proto3" json:"current_streak_days,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 包含今天在内的连续打卡天数。
+	CurrentStreakDays int32 `protobuf:"varint,1,opt,name=current_streak_days,json=currentStreakDays,proto3" json:"current_streak_days,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *CheckInResponse) Reset() {
 	*x = CheckInResponse{}
-	mi := &file_user_v1_user_proto_msgTypes[18]
+	mi := &file_user_v1_user_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1003,7 +1518,7 @@ func (x *CheckInResponse) String() string {
 func (*CheckInResponse) ProtoMessage() {}
 
 func (x *CheckInResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_v1_user_proto_msgTypes[18]
+	mi := &file_user_v1_user_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1016,7 +1531,7 @@ func (x *CheckInResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckInResponse.ProtoReflect.Descriptor instead.
 func (*CheckInResponse) Descriptor() ([]byte, []int) {
-	return file_user_v1_user_proto_rawDescGZIP(), []int{18}
+	return file_user_v1_user_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CheckInResponse) GetCurrentStreakDays() int32 {
@@ -1030,9 +1545,30 @@ var File_user_v1_user_proto protoreflect.FileDescriptor
 
 const file_user_v1_user_proto_rawDesc = "" +
 	"\n" +
-	"\x12user/v1/user.proto\x12\auser.v1\x1a\x1cgoogle/api/annotations.proto\"E\n" +
-	"\x12WechatLoginRequest\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\tR\x04code\x12\x1b\n" +
+	"\x12user/v1/user.proto\x12\auser.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\"\x86\x01\n" +
+	"\x0fRegisterRequest\x12\x19\n" +
+	"\x05email\x18\x01 \x01(\tB\x03\xe0A\x02R\x05email\x12\x1f\n" +
+	"\bpassword\x18\x02 \x01(\tB\x03\xe0A\x02R\bpassword\x12\x1a\n" +
+	"\bnickname\x18\x03 \x01(\tR\bnickname\x12\x1b\n" +
+	"\tdevice_id\x18\x04 \x01(\tR\bdeviceId\"g\n" +
+	"\fLoginRequest\x12\x19\n" +
+	"\x05email\x18\x01 \x01(\tB\x03\xe0A\x02R\x05email\x12\x1f\n" +
+	"\bpassword\x18\x02 \x01(\tB\x03\xe0A\x02R\bpassword\x12\x1b\n" +
+	"\tdevice_id\x18\x03 \x01(\tR\bdeviceId\"\xdc\x01\n" +
+	"\x10RegisterResponse\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
+	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12,\n" +
+	"\x12expires_in_seconds\x18\x03 \x01(\x03R\x10expiresInSeconds\x12!\n" +
+	"\x04user\x18\x04 \x01(\v2\r.user.v1.UserR\x04user\x12/\n" +
+	"\x13onboarding_required\x18\x05 \x01(\bR\x12onboardingRequired\"\xd9\x01\n" +
+	"\rLoginResponse\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
+	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12,\n" +
+	"\x12expires_in_seconds\x18\x03 \x01(\x03R\x10expiresInSeconds\x12!\n" +
+	"\x04user\x18\x04 \x01(\v2\r.user.v1.UserR\x04user\x12/\n" +
+	"\x13onboarding_required\x18\x05 \x01(\bR\x12onboardingRequired\"J\n" +
+	"\x12WechatLoginRequest\x12\x17\n" +
+	"\x04code\x18\x01 \x01(\tB\x03\xe0A\x02R\x04code\x12\x1b\n" +
 	"\tdevice_id\x18\x02 \x01(\tR\bdeviceId\"\xff\x01\n" +
 	"\x13WechatLoginResponse\x12!\n" +
 	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
@@ -1040,15 +1576,25 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\x12expires_in_seconds\x18\x03 \x01(\x03R\x10expiresInSeconds\x12!\n" +
 	"\x04user\x18\x04 \x01(\v2\r.user.v1.UserR\x04user\x12\x1e\n" +
 	"\vis_new_user\x18\x05 \x01(\bR\tisNewUser\x12/\n" +
-	"\x13onboarding_required\x18\x06 \x01(\bR\x12onboardingRequired\":\n" +
-	"\x13RefreshTokenRequest\x12#\n" +
-	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\"\x8c\x01\n" +
+	"\x13onboarding_required\x18\x06 \x01(\bR\x12onboardingRequired\"_\n" +
+	"\x12UToolsLoginRequest\x12,\n" +
+	"\x0ftemporary_token\x18\x01 \x01(\tB\x03\xe0A\x02R\x0etemporaryToken\x12\x1b\n" +
+	"\tdevice_id\x18\x02 \x01(\tR\bdeviceId\"\xff\x01\n" +
+	"\x13UToolsLoginResponse\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
+	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12,\n" +
+	"\x12expires_in_seconds\x18\x03 \x01(\x03R\x10expiresInSeconds\x12!\n" +
+	"\x04user\x18\x04 \x01(\v2\r.user.v1.UserR\x04user\x12\x1e\n" +
+	"\vis_new_user\x18\x05 \x01(\bR\tisNewUser\x12/\n" +
+	"\x13onboarding_required\x18\x06 \x01(\bR\x12onboardingRequired\"?\n" +
+	"\x13RefreshTokenRequest\x12(\n" +
+	"\rrefresh_token\x18\x01 \x01(\tB\x03\xe0A\x02R\frefreshToken\"\x8c\x01\n" +
 	"\x14RefreshTokenResponse\x12!\n" +
 	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
 	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12,\n" +
-	"\x12expires_in_seconds\x18\x03 \x01(\x03R\x10expiresInSeconds\"4\n" +
-	"\rLogoutRequest\x12#\n" +
-	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\"\x10\n" +
+	"\x12expires_in_seconds\x18\x03 \x01(\x03R\x10expiresInSeconds\"9\n" +
+	"\rLogoutRequest\x12(\n" +
+	"\rrefresh_token\x18\x01 \x01(\tB\x03\xe0A\x02R\frefreshToken\"\x10\n" +
 	"\x0eLogoutResponse\"r\n" +
 	"\x04User\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1a\n" +
@@ -1064,42 +1610,47 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\x10duration_minutes\x18\x05 \x01(\x05R\x0fdurationMinutes\x12:\n" +
 	"\x19available_equipment_codes\x18\x06 \x03(\tR\x17availableEquipmentCodes\x12!\n" +
 	"\finjury_notes\x18\a \x03(\tR\vinjuryNotes\x121\n" +
-	"\x14onboarding_completed\x18\b \x01(\bR\x13onboardingCompleted\"3\n" +
-	"\x18GetFitnessProfileRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"N\n" +
+	"\x14onboarding_completed\x18\b \x01(\bR\x13onboardingCompleted\"8\n" +
+	"\x18GetFitnessProfileRequest\x12\x1c\n" +
+	"\auser_id\x18\x01 \x01(\tB\x03\xe0A\x02R\x06userId\"N\n" +
 	"\x19GetFitnessProfileResponse\x121\n" +
-	"\aprofile\x18\x01 \x01(\v2\x17.user.v1.FitnessProfileR\aprofile\"P\n" +
-	"\x1bUpdateFitnessProfileRequest\x121\n" +
-	"\aprofile\x18\x01 \x01(\v2\x17.user.v1.FitnessProfileR\aprofile\"Q\n" +
+	"\aprofile\x18\x01 \x01(\v2\x17.user.v1.FitnessProfileR\aprofile\"s\n" +
+	"\x1bUpdateFitnessProfileRequest\x126\n" +
+	"\aprofile\x18\x01 \x01(\v2\x17.user.v1.FitnessProfileB\x03\xe0A\x02R\aprofile\x12\x1c\n" +
+	"\auser_id\x18\x02 \x01(\tB\x03\xe0A\x02R\x06userId\"Q\n" +
 	"\x1cUpdateFitnessProfileResponse\x121\n" +
-	"\aprofile\x18\x01 \x01(\v2\x17.user.v1.FitnessProfileR\aprofile\"5\n" +
-	"\x1aGenerateWorkoutPlanRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"k\n" +
+	"\aprofile\x18\x01 \x01(\v2\x17.user.v1.FitnessProfileR\aprofile\":\n" +
+	"\x1aGenerateWorkoutPlanRequest\x12\x1c\n" +
+	"\auser_id\x18\x01 \x01(\tB\x03\xe0A\x02R\x06userId\"k\n" +
 	"\vWorkoutPlan\x12\x17\n" +
 	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x12\n" +
 	"\x04goal\x18\x03 \x01(\tR\x04goal\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\"G\n" +
 	"\x1bGenerateWorkoutPlanResponse\x12(\n" +
-	"\x04plan\x18\x01 \x01(\v2\x14.user.v1.WorkoutPlanR\x04plan\"I\n" +
-	"\x15GetWorkoutPlanRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x17\n" +
-	"\aplan_id\x18\x02 \x01(\tR\x06planId\"B\n" +
+	"\x04plan\x18\x01 \x01(\v2\x14.user.v1.WorkoutPlanR\x04plan\"S\n" +
+	"\x15GetWorkoutPlanRequest\x12\x1c\n" +
+	"\auser_id\x18\x01 \x01(\tB\x03\xe0A\x02R\x06userId\x12\x1c\n" +
+	"\aplan_id\x18\x02 \x01(\tB\x03\xe0A\x02R\x06planId\"B\n" +
 	"\x16GetWorkoutPlanResponse\x12(\n" +
-	"\x04plan\x18\x01 \x01(\v2\x14.user.v1.WorkoutPlanR\x04plan\")\n" +
-	"\x0eCheckInRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"A\n" +
+	"\x04plan\x18\x01 \x01(\v2\x14.user.v1.WorkoutPlanR\x04plan\".\n" +
+	"\x0eCheckInRequest\x12\x1c\n" +
+	"\auser_id\x18\x01 \x01(\tB\x03\xe0A\x02R\x06userId\"A\n" +
 	"\x0fCheckInResponse\x12.\n" +
-	"\x13current_streak_days\x18\x01 \x01(\x05R\x11currentStreakDays2\xf9\a\n" +
-	"\vUserService\x12j\n" +
-	"\vWechatLogin\x12\x1b.user.v1.WechatLoginRequest\x1a\x1c.user.v1.WechatLoginResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/auth/wechat/login\x12n\n" +
+	"\x13current_streak_days\x18\x01 \x01(\x05R\x11currentStreakDays2\x89\n" +
+	"\n" +
+	"\vUserService\x12]\n" +
+	"\bRegister\x12\x18.user.v1.RegisterRequest\x1a\x19.user.v1.RegisterResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/v1/auth/register\x12Q\n" +
+	"\x05Login\x12\x15.user.v1.LoginRequest\x1a\x16.user.v1.LoginResponse\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/v1/auth/login\x12j\n" +
+	"\vWechatLogin\x12\x1b.user.v1.WechatLoginRequest\x1a\x1c.user.v1.WechatLoginResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/auth/wechat/login\x12j\n" +
+	"\vUToolsLogin\x12\x1b.user.v1.UToolsLoginRequest\x1a\x1c.user.v1.UToolsLoginResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/auth/utools/login\x12n\n" +
 	"\fRefreshToken\x12\x1c.user.v1.RefreshTokenRequest\x1a\x1d.user.v1.RefreshTokenResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/auth/token:refresh\x12U\n" +
 	"\x06Logout\x12\x16.user.v1.LogoutRequest\x1a\x17.user.v1.LogoutResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/auth/logout\x12\x87\x01\n" +
-	"\x11GetFitnessProfile\x12!.user.v1.GetFitnessProfileRequest\x1a\".user.v1.GetFitnessProfileResponse\"+\x82\xd3\xe4\x93\x02%\x12#/v1/users/{user_id}/fitness-profile\x12\xa1\x01\n" +
-	"\x14UpdateFitnessProfile\x12$.user.v1.UpdateFitnessProfileRequest\x1a%.user.v1.UpdateFitnessProfileResponse\"<\x82\xd3\xe4\x93\x026:\aprofile\x1a+/v1/users/{profile.user_id}/fitness-profile\x12\x97\x01\n" +
-	"\x13GenerateWorkoutPlan\x12#.user.v1.GenerateWorkoutPlanRequest\x1a$.user.v1.GenerateWorkoutPlanResponse\"5\x82\xd3\xe4\x93\x02/:\x01*\"*/v1/users/{user_id}/workout-plans:generate\x12\x86\x01\n" +
-	"\x0eGetWorkoutPlan\x12\x1e.user.v1.GetWorkoutPlanRequest\x1a\x1f.user.v1.GetWorkoutPlanResponse\"3\x82\xd3\xe4\x93\x02-\x12+/v1/users/{user_id}/workout-plans/{plan_id}\x12f\n" +
-	"\aCheckIn\x12\x17.user.v1.CheckInRequest\x1a\x18.user.v1.CheckInResponse\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/v1/users/{user_id}/check-insB6Z4github.com/tiehu-ai/tiehu-fitness/api/user/v1;userv1b\x06proto3"
+	"\x11GetFitnessProfile\x12!.user.v1.GetFitnessProfileRequest\x1a\".user.v1.GetFitnessProfileResponse\"+\x82\xd3\xe4\x93\x02%\x12#/v1/users/{user_id}/fitness-profile\x12\x99\x01\n" +
+	"\x14UpdateFitnessProfile\x12$.user.v1.UpdateFitnessProfileRequest\x1a%.user.v1.UpdateFitnessProfileResponse\"4\x82\xd3\xe4\x93\x02.:\aprofile\x1a#/v1/users/{user_id}/fitness-profile\x12\x94\x01\n" +
+	"\x13GenerateWorkoutPlan\x12#.user.v1.GenerateWorkoutPlanRequest\x1a$.user.v1.GenerateWorkoutPlanResponse\"2\x82\xd3\xe4\x93\x02,\"*/v1/users/{user_id}/workout-plans:generate\x12\x86\x01\n" +
+	"\x0eGetWorkoutPlan\x12\x1e.user.v1.GetWorkoutPlanRequest\x1a\x1f.user.v1.GetWorkoutPlanResponse\"3\x82\xd3\xe4\x93\x02-\x12+/v1/users/{user_id}/workout-plans/{plan_id}\x12c\n" +
+	"\aCheckIn\x12\x17.user.v1.CheckInRequest\x1a\x18.user.v1.CheckInResponse\"%\x82\xd3\xe4\x93\x02\x1f\"\x1d/v1/users/{user_id}/check-insB6Z4github.com/tiehu-ai/tiehu-fitness/api/user/v1;userv1b\x06proto3"
 
 var (
 	file_user_v1_user_proto_rawDescOnce sync.Once
@@ -1113,56 +1664,71 @@ func file_user_v1_user_proto_rawDescGZIP() []byte {
 	return file_user_v1_user_proto_rawDescData
 }
 
-var file_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_user_v1_user_proto_goTypes = []any{
-	(*WechatLoginRequest)(nil),           // 0: user.v1.WechatLoginRequest
-	(*WechatLoginResponse)(nil),          // 1: user.v1.WechatLoginResponse
-	(*RefreshTokenRequest)(nil),          // 2: user.v1.RefreshTokenRequest
-	(*RefreshTokenResponse)(nil),         // 3: user.v1.RefreshTokenResponse
-	(*LogoutRequest)(nil),                // 4: user.v1.LogoutRequest
-	(*LogoutResponse)(nil),               // 5: user.v1.LogoutResponse
-	(*User)(nil),                         // 6: user.v1.User
-	(*FitnessProfile)(nil),               // 7: user.v1.FitnessProfile
-	(*GetFitnessProfileRequest)(nil),     // 8: user.v1.GetFitnessProfileRequest
-	(*GetFitnessProfileResponse)(nil),    // 9: user.v1.GetFitnessProfileResponse
-	(*UpdateFitnessProfileRequest)(nil),  // 10: user.v1.UpdateFitnessProfileRequest
-	(*UpdateFitnessProfileResponse)(nil), // 11: user.v1.UpdateFitnessProfileResponse
-	(*GenerateWorkoutPlanRequest)(nil),   // 12: user.v1.GenerateWorkoutPlanRequest
-	(*WorkoutPlan)(nil),                  // 13: user.v1.WorkoutPlan
-	(*GenerateWorkoutPlanResponse)(nil),  // 14: user.v1.GenerateWorkoutPlanResponse
-	(*GetWorkoutPlanRequest)(nil),        // 15: user.v1.GetWorkoutPlanRequest
-	(*GetWorkoutPlanResponse)(nil),       // 16: user.v1.GetWorkoutPlanResponse
-	(*CheckInRequest)(nil),               // 17: user.v1.CheckInRequest
-	(*CheckInResponse)(nil),              // 18: user.v1.CheckInResponse
+	(*RegisterRequest)(nil),              // 0: user.v1.RegisterRequest
+	(*LoginRequest)(nil),                 // 1: user.v1.LoginRequest
+	(*RegisterResponse)(nil),             // 2: user.v1.RegisterResponse
+	(*LoginResponse)(nil),                // 3: user.v1.LoginResponse
+	(*WechatLoginRequest)(nil),           // 4: user.v1.WechatLoginRequest
+	(*WechatLoginResponse)(nil),          // 5: user.v1.WechatLoginResponse
+	(*UToolsLoginRequest)(nil),           // 6: user.v1.UToolsLoginRequest
+	(*UToolsLoginResponse)(nil),          // 7: user.v1.UToolsLoginResponse
+	(*RefreshTokenRequest)(nil),          // 8: user.v1.RefreshTokenRequest
+	(*RefreshTokenResponse)(nil),         // 9: user.v1.RefreshTokenResponse
+	(*LogoutRequest)(nil),                // 10: user.v1.LogoutRequest
+	(*LogoutResponse)(nil),               // 11: user.v1.LogoutResponse
+	(*User)(nil),                         // 12: user.v1.User
+	(*FitnessProfile)(nil),               // 13: user.v1.FitnessProfile
+	(*GetFitnessProfileRequest)(nil),     // 14: user.v1.GetFitnessProfileRequest
+	(*GetFitnessProfileResponse)(nil),    // 15: user.v1.GetFitnessProfileResponse
+	(*UpdateFitnessProfileRequest)(nil),  // 16: user.v1.UpdateFitnessProfileRequest
+	(*UpdateFitnessProfileResponse)(nil), // 17: user.v1.UpdateFitnessProfileResponse
+	(*GenerateWorkoutPlanRequest)(nil),   // 18: user.v1.GenerateWorkoutPlanRequest
+	(*WorkoutPlan)(nil),                  // 19: user.v1.WorkoutPlan
+	(*GenerateWorkoutPlanResponse)(nil),  // 20: user.v1.GenerateWorkoutPlanResponse
+	(*GetWorkoutPlanRequest)(nil),        // 21: user.v1.GetWorkoutPlanRequest
+	(*GetWorkoutPlanResponse)(nil),       // 22: user.v1.GetWorkoutPlanResponse
+	(*CheckInRequest)(nil),               // 23: user.v1.CheckInRequest
+	(*CheckInResponse)(nil),              // 24: user.v1.CheckInResponse
 }
 var file_user_v1_user_proto_depIdxs = []int32{
-	6,  // 0: user.v1.WechatLoginResponse.user:type_name -> user.v1.User
-	7,  // 1: user.v1.GetFitnessProfileResponse.profile:type_name -> user.v1.FitnessProfile
-	7,  // 2: user.v1.UpdateFitnessProfileRequest.profile:type_name -> user.v1.FitnessProfile
-	7,  // 3: user.v1.UpdateFitnessProfileResponse.profile:type_name -> user.v1.FitnessProfile
-	13, // 4: user.v1.GenerateWorkoutPlanResponse.plan:type_name -> user.v1.WorkoutPlan
-	13, // 5: user.v1.GetWorkoutPlanResponse.plan:type_name -> user.v1.WorkoutPlan
-	0,  // 6: user.v1.UserService.WechatLogin:input_type -> user.v1.WechatLoginRequest
-	2,  // 7: user.v1.UserService.RefreshToken:input_type -> user.v1.RefreshTokenRequest
-	4,  // 8: user.v1.UserService.Logout:input_type -> user.v1.LogoutRequest
-	8,  // 9: user.v1.UserService.GetFitnessProfile:input_type -> user.v1.GetFitnessProfileRequest
-	10, // 10: user.v1.UserService.UpdateFitnessProfile:input_type -> user.v1.UpdateFitnessProfileRequest
-	12, // 11: user.v1.UserService.GenerateWorkoutPlan:input_type -> user.v1.GenerateWorkoutPlanRequest
-	15, // 12: user.v1.UserService.GetWorkoutPlan:input_type -> user.v1.GetWorkoutPlanRequest
-	17, // 13: user.v1.UserService.CheckIn:input_type -> user.v1.CheckInRequest
-	1,  // 14: user.v1.UserService.WechatLogin:output_type -> user.v1.WechatLoginResponse
-	3,  // 15: user.v1.UserService.RefreshToken:output_type -> user.v1.RefreshTokenResponse
-	5,  // 16: user.v1.UserService.Logout:output_type -> user.v1.LogoutResponse
-	9,  // 17: user.v1.UserService.GetFitnessProfile:output_type -> user.v1.GetFitnessProfileResponse
-	11, // 18: user.v1.UserService.UpdateFitnessProfile:output_type -> user.v1.UpdateFitnessProfileResponse
-	14, // 19: user.v1.UserService.GenerateWorkoutPlan:output_type -> user.v1.GenerateWorkoutPlanResponse
-	16, // 20: user.v1.UserService.GetWorkoutPlan:output_type -> user.v1.GetWorkoutPlanResponse
-	18, // 21: user.v1.UserService.CheckIn:output_type -> user.v1.CheckInResponse
-	14, // [14:22] is the sub-list for method output_type
-	6,  // [6:14] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	12, // 0: user.v1.RegisterResponse.user:type_name -> user.v1.User
+	12, // 1: user.v1.LoginResponse.user:type_name -> user.v1.User
+	12, // 2: user.v1.WechatLoginResponse.user:type_name -> user.v1.User
+	12, // 3: user.v1.UToolsLoginResponse.user:type_name -> user.v1.User
+	13, // 4: user.v1.GetFitnessProfileResponse.profile:type_name -> user.v1.FitnessProfile
+	13, // 5: user.v1.UpdateFitnessProfileRequest.profile:type_name -> user.v1.FitnessProfile
+	13, // 6: user.v1.UpdateFitnessProfileResponse.profile:type_name -> user.v1.FitnessProfile
+	19, // 7: user.v1.GenerateWorkoutPlanResponse.plan:type_name -> user.v1.WorkoutPlan
+	19, // 8: user.v1.GetWorkoutPlanResponse.plan:type_name -> user.v1.WorkoutPlan
+	0,  // 9: user.v1.UserService.Register:input_type -> user.v1.RegisterRequest
+	1,  // 10: user.v1.UserService.Login:input_type -> user.v1.LoginRequest
+	4,  // 11: user.v1.UserService.WechatLogin:input_type -> user.v1.WechatLoginRequest
+	6,  // 12: user.v1.UserService.UToolsLogin:input_type -> user.v1.UToolsLoginRequest
+	8,  // 13: user.v1.UserService.RefreshToken:input_type -> user.v1.RefreshTokenRequest
+	10, // 14: user.v1.UserService.Logout:input_type -> user.v1.LogoutRequest
+	14, // 15: user.v1.UserService.GetFitnessProfile:input_type -> user.v1.GetFitnessProfileRequest
+	16, // 16: user.v1.UserService.UpdateFitnessProfile:input_type -> user.v1.UpdateFitnessProfileRequest
+	18, // 17: user.v1.UserService.GenerateWorkoutPlan:input_type -> user.v1.GenerateWorkoutPlanRequest
+	21, // 18: user.v1.UserService.GetWorkoutPlan:input_type -> user.v1.GetWorkoutPlanRequest
+	23, // 19: user.v1.UserService.CheckIn:input_type -> user.v1.CheckInRequest
+	2,  // 20: user.v1.UserService.Register:output_type -> user.v1.RegisterResponse
+	3,  // 21: user.v1.UserService.Login:output_type -> user.v1.LoginResponse
+	5,  // 22: user.v1.UserService.WechatLogin:output_type -> user.v1.WechatLoginResponse
+	7,  // 23: user.v1.UserService.UToolsLogin:output_type -> user.v1.UToolsLoginResponse
+	9,  // 24: user.v1.UserService.RefreshToken:output_type -> user.v1.RefreshTokenResponse
+	11, // 25: user.v1.UserService.Logout:output_type -> user.v1.LogoutResponse
+	15, // 26: user.v1.UserService.GetFitnessProfile:output_type -> user.v1.GetFitnessProfileResponse
+	17, // 27: user.v1.UserService.UpdateFitnessProfile:output_type -> user.v1.UpdateFitnessProfileResponse
+	20, // 28: user.v1.UserService.GenerateWorkoutPlan:output_type -> user.v1.GenerateWorkoutPlanResponse
+	22, // 29: user.v1.UserService.GetWorkoutPlan:output_type -> user.v1.GetWorkoutPlanResponse
+	24, // 30: user.v1.UserService.CheckIn:output_type -> user.v1.CheckInResponse
+	20, // [20:31] is the sub-list for method output_type
+	9,  // [9:20] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_user_v1_user_proto_init() }
@@ -1176,7 +1742,7 @@ func file_user_v1_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_v1_user_proto_rawDesc), len(file_user_v1_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

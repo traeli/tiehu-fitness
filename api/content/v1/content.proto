@@ -5,57 +5,88 @@ package content.v1;
 option go_package = "github.com/tiehu-ai/tiehu-fitness/api/content/v1;contentv1";
 
 import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 
+// ContentService 提供健身器材和教学动作内容查询能力。
 service ContentService {
+  // GetEquipment 查询已发布的器材详情。
   rpc GetEquipment(GetEquipmentRequest) returns (GetEquipmentResponse) {
     option (google.api.http) = {get: "/v1/equipment/{equipment_code}"};
   }
+  // RecommendExercises 查询指定器材适用的已发布动作。
   rpc RecommendExercises(RecommendExercisesRequest) returns (RecommendExercisesResponse) {
     option (google.api.http) = {get: "/v1/equipment/{equipment_code}/exercises"};
   }
+  // GetExercise 查询已发布的动作和教学信息。
   rpc GetExercise(GetExerciseRequest) returns (GetExerciseResponse) {
     option (google.api.http) = {get: "/v1/exercises/{exercise_code}"};
   }
 }
 
+// 健身器材内容。
 message Equipment {
+  // 稳定且唯一的器材编码。
   string equipment_code = 1;
+  // 器材展示名称。
   string name = 2;
+  // 器材用途说明。
   string description = 3;
+  // 主要训练肌群。
   repeated string target_muscles = 4;
+  // 使用器材时的安全提醒。
   repeated string safety_tips = 5;
 }
 
+// 健身动作和教学内容。
 message Exercise {
+  // 稳定且唯一的动作编码。
   string exercise_code = 1;
+  // 动作展示名称。
   string name = 2;
+  // 动作使用的器材编码。
   string equipment_code = 3;
+  // 教学视频资源地址。
   string instruction_video_uri = 4;
+  // 动作主要训练肌群。
   repeated string target_muscles = 5;
+  // 动作执行要点。
   repeated string key_points = 6;
+  // 常见错误动作。
   repeated string common_mistakes = 7;
 }
 
+// 查询器材参数。
 message GetEquipmentRequest {
-  string equipment_code = 1;
+  // 器材编码。
+  string equipment_code = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 查询器材结果。
 message GetEquipmentResponse {
+  // 指定器材详情。
   Equipment equipment = 1;
 }
 
+// 推荐动作参数。
 message RecommendExercisesRequest {
-  string equipment_code = 1;
+  // 器材编码。
+  string equipment_code = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 推荐动作结果。
 message RecommendExercisesResponse {
+  // 适用于指定器材的动作列表。
   repeated Exercise exercises = 1;
 }
 
+// 查询动作参数。
 message GetExerciseRequest {
-  string exercise_code = 1;
+  // 动作编码。
+  string exercise_code = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 查询动作结果。
 message GetExerciseResponse {
+  // 指定动作详情。
   Exercise exercise = 1;
 }

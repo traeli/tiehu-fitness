@@ -15,5 +15,9 @@ plugins:
     out: .
     strategy: all
     opt:
+      - title=铁虎健身教练 API
+      - description=微信小程序健身辅助后端接口，包含用户、健身内容和 AI 视觉分析能力。
+      - version=0.1.0
       - fq_schema_naming=true
+      - enum_type=string
       - default_response=false

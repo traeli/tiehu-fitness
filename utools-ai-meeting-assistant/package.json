@@ -1,0 +1,35 @@
+{
+  "name": "utools-ai-meeting-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "vite --mode api",
+    "dev:real": "vite --mode real",
+    "dev:utools": "npm run native:build && vite --mode real",
+    "native:build": "node ./scripts/build-native.mjs",
+    "native:smoke": "node ./scripts/smoke-native-audio.cjs",
+    "build": "npm run native:build && vue-tsc -b && vite build --mode utools-local",
+    "build:production": "npm run native:build && vue-tsc -b && vite build --mode production",
+    "build:watch": "vite build --watch --mode utools-local",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "pinia": "^3.0.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "typescript": "~5.9.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.0",
+    "vue-tsc": "^3.0.0"
+  }
+}

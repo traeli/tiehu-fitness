@@ -27,9 +27,14 @@ const (
 // VisionServiceClient is the client API for VisionService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// VisionService 提供图片器材识别和视频姿势分析任务能力。
 type VisionServiceClient interface {
+	// RecognizeEquipment 创建图片器材识别任务。
 	RecognizeEquipment(ctx context.Context, in *RecognizeEquipmentRequest, opts ...grpc.CallOption) (*RecognizeEquipmentResponse, error)
+	// AnalyzePosture 创建视频姿势分析任务。
 	AnalyzePosture(ctx context.Context, in *AnalyzePostureRequest, opts ...grpc.CallOption) (*AnalyzePostureResponse, error)
+	// GetAnalysisJob 查询异步分析任务的状态和结果。
 	GetAnalysisJob(ctx context.Context, in *GetAnalysisJobRequest, opts ...grpc.CallOption) (*GetAnalysisJobResponse, error)
 }
 
@@ -74,9 +79,14 @@ func (c *visionServiceClient) GetAnalysisJob(ctx context.Context, in *GetAnalysi
 // VisionServiceServer is the server API for VisionService service.
 // All implementations must embed UnimplementedVisionServiceServer
 // for forward compatibility.
+//
+// VisionService 提供图片器材识别和视频姿势分析任务能力。
 type VisionServiceServer interface {
+	// RecognizeEquipment 创建图片器材识别任务。
 	RecognizeEquipment(context.Context, *RecognizeEquipmentRequest) (*RecognizeEquipmentResponse, error)
+	// AnalyzePosture 创建视频姿势分析任务。
 	AnalyzePosture(context.Context, *AnalyzePostureRequest) (*AnalyzePostureResponse, error)
+	// GetAnalysisJob 查询异步分析任务的状态和结果。
 	GetAnalysisJob(context.Context, *GetAnalysisJobRequest) (*GetAnalysisJobResponse, error)
 	mustEmbedUnimplementedVisionServiceServer()
 }

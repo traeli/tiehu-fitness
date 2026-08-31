@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package vision.v1;
+
+option go_package = "github.com/tiehu-ai/tiehu-fitness/api/vision/v1;visionv1";
+
+import "google/api/field_behavior.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "meeting/v1/meeting.proto";
+
+// MeetingTranscriptionInternalService 提供 core-service 到 vision-service 的内部转写控制能力。
+service MeetingTranscriptionInternalService {
+  // PrepareTranscription 幂等准备实时转写会话并签发一次性 ticket。
+  rpc PrepareTranscription(PrepareTranscriptionRequest) returns (PrepareTranscriptionResponse);
+
+  // CancelTranscription 幂等取消尚未正常结束的实时转写会话。
+  rpc CancelTranscription(CancelTranscriptionRequest) returns (CancelTranscriptionResponse);
+
+  // GetTranscriptionStatus 查询 vision-service 拥有的转写 session 状态。
+  rpc GetTranscriptionStatus(GetTranscriptionStatusRequest) returns (GetTranscriptionStatusResponse);
+
+  // PrepareMeetingSummary 幂等创建一个异步会议纪要任务。
+  rpc PrepareMeetingSummary(PrepareMeetingSummaryRequest) returns (PrepareMeetingSummaryResponse);
+}
+
+// PrepareMeetingSummaryRequest 是 core-service 提交纪要任务的参数。
+message PrepareMeetingSummaryRequest {
+  // core-service 会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // 已认证的会议所有者 UUID。
+  string user_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // core-service 为本次任务分配的纪要版本。
+  int64 version = 3 [(google.api.field_behavior) = REQUIRED];
+  // 本次任务必须读取的最终转写版本。
+  int64 source_transcript_revision = 4 [(google.api.field_behavior) = REQUIRED];
+  // 会议语言偏好。
+  meeting.v1.MeetingLanguage language = 5 [(google.api.field_behavior) = REQUIRED];
+  // 跨重试保持不变的内部幂等键。
+  string idempotency_key = 6 [(google.api.field_behavior) = REQUIRED];
+}
+
+// PrepareMeetingSummaryResponse 返回已创建或由幂等键命中的任务状态。
+message PrepareMeetingSummaryResponse {
+  // vision-service 纪要任务 UUID。
+  string job_id = 1;
+  // 当前任务状态。
+  meeting.v1.MeetingSummaryStatus status = 2;
+}
+
+// TranscriptionCancelReason 表示 core-service 请求取消会话的原因。
+enum TranscriptionCancelReason {
+  // 未指定取消原因。
+  TRANSCRIPTION_CANCEL_REASON_UNSPECIFIED = 0;
+  // 用户主动取消会议。
+  TRANSCRIPTION_CANCEL_REASON_USER_CANCELLED = 1;
+  // 创建会议后的补偿清理。
+  TRANSCRIPTION_CANCEL_REASON_PREPARE_COMPENSATION = 2;
+  // 会议资源被删除。
+  TRANSCRIPTION_CANCEL_REASON_MEETING_DELETED = 3;
+  // 管理策略终止会话。
+  TRANSCRIPTION_CANCEL_REASON_POLICY_ENFORCED = 4;
+}
+
+// PrepareTranscriptionRequest 是准备实时转写会话的内部参数。
+message PrepareTranscriptionRequest {
+  // core-service 生成的会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // 已认证的系统内部用户 UUID。
+  string user_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // core-service 创建的额度预占 UUID。
+  string reservation_id = 3 [(google.api.field_behavior) = REQUIRED];
+  // 会议识别语言偏好。
+  meeting.v1.MeetingLanguage language = 4 [(google.api.field_behavior) = REQUIRED];
+  // 本次 session 允许接收的最大音频时长。
+  google.protobuf.Duration granted_audio_duration = 5 [(google.api.field_behavior) = REQUIRED];
+  // 跨重试保持不变的内部幂等键。
+  string idempotency_key = 6 [(google.api.field_behavior) = REQUIRED];
+}
+
+// PrepareTranscriptionResponse 返回 vision-service 创建的短期连接参数。
+message PrepareTranscriptionResponse {
+  // 返回给 uTools 的一次性转写会话参数。
+  meeting.v1.TranscriptionSession transcription_session = 1;
+}
+
+// CancelTranscriptionRequest 是取消转写会话的内部参数。
+message CancelTranscriptionRequest {
+  // vision-service 转写会话 UUID。
+  string session_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // core-service 会议 UUID。
+  string meeting_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // 取消原因。
+  TranscriptionCancelReason reason = 3 [(google.api.field_behavior) = REQUIRED];
+  // 跨重试保持不变的内部幂等键。
+  string idempotency_key = 4 [(google.api.field_behavior) = REQUIRED];
+}
+
+// CancelTranscriptionResponse 返回取消后的 session 状态。
+message CancelTranscriptionResponse {
+  // 取消后的转写状态。
+  meeting.v1.TranscriptionStatus status = 1;
+}
+
+// GetTranscriptionStatusRequest 是查询转写 session 的内部参数。
+message GetTranscriptionStatusRequest {
+  // vision-service 转写会话 UUID。
+  string session_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // core-service 会议 UUID，用于交叉校验归属。
+  string meeting_id = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetTranscriptionStatusResponse 返回 vision-service 的 session 快照。
+message GetTranscriptionStatusResponse {
+  // vision-service 转写会话 UUID。
+  string session_id = 1;
+  // 当前转写状态。
+  meeting.v1.TranscriptionStatus status = 2;
+  // 本次获准的最大音频时长。
+  google.protobuf.Duration granted_audio_duration = 3;
+  // vision-service 已接受的唯一有效音频累计时长。
+  google.protobuf.Duration accepted_audio_duration = 4;
+  // session 最后更新时间。
+  google.protobuf.Timestamp updated_at = 5;
+}

@@ -1,0 +1,60 @@
+name: tiehu-fitness-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:?POSTGRES_ADMIN_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_ADMIN_DATABASE:-postgres}
+      CORE_DATABASE_USER: ${CORE_DATABASE_USER:?CORE_DATABASE_USER is required}
+      CORE_DATABASE_PASSWORD: ${CORE_DATABASE_PASSWORD:?CORE_DATABASE_PASSWORD is required}
+      CORE_DATABASE_NAME: ${CORE_DATABASE_NAME:?CORE_DATABASE_NAME is required}
+      VISION_DATABASE_USER: ${VISION_DATABASE_USER:?VISION_DATABASE_USER is required}
+      VISION_DATABASE_PASSWORD: ${VISION_DATABASE_PASSWORD:?VISION_DATABASE_PASSWORD is required}
+      VISION_DATABASE_NAME: ${VISION_DATABASE_NAME:?VISION_DATABASE_NAME is required}
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - tiehu_postgres_data:/var/lib/postgresql/data
+      - ./configs/docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+      - ./app/core/migrations:/tiehu-migrations/core:ro
+      - ./app/vision/migrations:/tiehu-migrations/vision:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_ADMIN_USERNAME: ${REDIS_ADMIN_USERNAME:?REDIS_ADMIN_USERNAME is required}
+      REDIS_ADMIN_PASSWORD: ${REDIS_ADMIN_PASSWORD:?REDIS_ADMIN_PASSWORD is required}
+      CORE_REDIS_USERNAME: ${CORE_REDIS_USERNAME:?CORE_REDIS_USERNAME is required}
+      CORE_REDIS_PASSWORD: ${CORE_REDIS_PASSWORD:?CORE_REDIS_PASSWORD is required}
+      VISION_REDIS_USERNAME: ${VISION_REDIS_USERNAME:?VISION_REDIS_USERNAME is required}
+      VISION_REDIS_PASSWORD: ${VISION_REDIS_PASSWORD:?VISION_REDIS_PASSWORD is required}
+    entrypoint: ["/usr/local/bin/tiehu-redis-entrypoint.sh"]
+    ports:
+      - "${REDIS_BIND_ADDRESS:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - tiehu_redis_data:/data
+      - ./configs/docker/redis/entrypoint.sh:/usr/local/bin/tiehu-redis-entrypoint.sh:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli --no-auth-warning --user $$REDIS_ADMIN_USERNAME --pass $$REDIS_ADMIN_PASSWORD ping | grep -q PONG",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+volumes:
+  tiehu_postgres_data:
+  tiehu_redis_data:

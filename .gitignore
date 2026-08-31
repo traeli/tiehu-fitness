@@ -5,3 +5,5 @@ bin/
 coverage.out
 *.log
 .env
+deploy/.env
+configs/docker-compose.env

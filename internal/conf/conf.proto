@@ -10,6 +10,49 @@ message Bootstrap {
   Server server = 1;
   Wechat wechat = 2;
   Auth auth = 3;
+  Database database = 4;
+  Redis redis = 5;
+  ASR asr = 6;
+  reserved 7;
+  reserved "meeting_quota";
+  UTools utools = 8;
+  VisionGRPCClient vision_grpc_client = 9;
+  RealtimeTranscription realtime_transcription = 10;
+  CoreGRPCClient core_grpc_client = 11;
+  TranscriptionOutboxWorker transcription_outbox_worker = 12;
+  LLM llm = 13;
+  MeetingSummaryWorker meeting_summary_worker = 14;
+  reserved 15;
+  reserved "provider_credential_encryption";
+}
+
+// LLM contains secret and network settings for meeting-summary adapters.
+// Provider and model selection are versioned in the Vision database.
+message LLM {
+  reserved 1, 2, 3, 5, 6, 7;
+  reserved "provider", "model", "prompt_version", "max_input_chars_per_chunk", "max_chunks", "max_output_tokens";
+
+  google.protobuf.Duration request_timeout = 4;
+  DeepSeek deepseek = 8;
+  bool allow_test_endpoint = 9;
+}
+
+// DeepSeek 配置 OpenAI Chat Completions 兼容的 DeepSeek Adapter。
+message DeepSeek {
+  reserved 1;
+  reserved "api_key";
+
+  string endpoint = 2;
+}
+
+// MeetingSummaryWorker 配置 vision 内部有界会议纪要 worker。
+message MeetingSummaryWorker {
+  google.protobuf.Duration poll_interval = 1;
+  google.protobuf.Duration lease_timeout = 2;
+  int32 batch_size = 3;
+  int32 max_attempts = 4;
+  google.protobuf.Duration initial_backoff = 5;
+  google.protobuf.Duration max_backoff = 6;
 }
 
 message Wechat {
@@ -17,9 +60,124 @@ message Wechat {
   string app_secret = 2;
 }
 
+// UTools configures server-side verification of plugin temporary tokens.
+message UTools {
+  string plugin_id = 1;
+  string plugin_secret = 2;
+  string base_info_endpoint = 3;
+  google.protobuf.Duration request_timeout = 4;
+  google.protobuf.Duration response_max_age = 5;
+  bool allow_test_endpoint = 6;
+}
+
+// VisionGRPCClient configures the core-to-vision internal control channel.
+message VisionGRPCClient {
+  string endpoint = 1;
+  google.protobuf.Duration request_timeout = 2;
+  bool tls_enabled = 3;
+  string tls_server_name = 4;
+  bool allow_insecure = 5;
+}
+
+// CoreGRPCClient configures the vision-to-core internal ingest channel.
+message CoreGRPCClient {
+  string endpoint = 1;
+  google.protobuf.Duration request_timeout = 2;
+  bool tls_enabled = 3;
+  string tls_server_name = 4;
+  bool allow_insecure = 5;
+}
+
+// TranscriptionOutboxWorker configures reliable final transcript delivery.
+message TranscriptionOutboxWorker {
+  google.protobuf.Duration poll_interval = 1;
+  google.protobuf.Duration lease_timeout = 2;
+  int32 batch_size = 3;
+  int32 max_attempts = 4;
+  google.protobuf.Duration initial_backoff = 5;
+  google.protobuf.Duration max_backoff = 6;
+}
+
+// RealtimeTranscription configures the client-facing vision WebSocket handoff.
+message RealtimeTranscription {
+  string websocket_url = 1;
+  google.protobuf.Duration ticket_ttl = 2;
+  google.protobuf.Duration chunk_duration = 3;
+  int32 max_queue_chunks = 4;
+  repeated string allowed_origins = 5;
+  google.protobuf.Duration handshake_timeout = 6;
+  google.protobuf.Duration idle_timeout = 7;
+  google.protobuf.Duration write_timeout = 8;
+  int64 max_message_bytes = 9;
+  int32 max_connections = 10;
+  // allow_insecure_loopback permits ws:// only for localhost development.
+  bool allow_insecure_loopback = 11;
+}
+
 message Auth {
   google.protobuf.Duration access_token_ttl = 1;
   google.protobuf.Duration refresh_token_ttl = 2;
+}
+
+message Database {
+  string driver = 1;
+  string dsn = 2;
+  int32 max_idle_conns = 3;
+  int32 max_open_conns = 4;
+  google.protobuf.Duration conn_max_lifetime = 5;
+  google.protobuf.Duration conn_max_idle_time = 6;
+}
+
+// Redis configures one service's isolated connection to the shared Redis
+// infrastructure. Each service must use its own ACL credentials and key prefix.
+message Redis {
+  string addr = 1;
+  string username = 2;
+  string password = 3;
+  int32 db = 4;
+  google.protobuf.Duration dial_timeout = 5;
+  google.protobuf.Duration read_timeout = 6;
+  google.protobuf.Duration write_timeout = 7;
+  int32 pool_size = 8;
+  int32 min_idle_conns = 9;
+  bool tls_enabled = 10;
+  string tls_server_name = 11;
+  string key_prefix = 12;
+}
+
+// ASR contains bounded process settings for real-time speech recognition.
+// Provider and model selection are versioned in the Vision database.
+message ASR {
+  reserved 1, 11;
+  reserved "provider", "allow_missing_credentials";
+
+  google.protobuf.Duration session_timeout = 2;
+  google.protobuf.Duration connect_timeout = 3;
+  google.protobuf.Duration read_timeout = 4;
+  google.protobuf.Duration write_timeout = 5;
+  google.protobuf.Duration finish_timeout = 6;
+  int32 max_concurrent_sessions = 7;
+  int32 max_audio_frame_bytes = 8;
+  BailianParaformer bailian = 9;
+  bool allow_test_endpoint = 10;
+  ASRStartupProbe startup_probe = 12;
+}
+
+// BailianParaformer configures secrets and the optional network override for
+// the Alibaba Cloud Model Studio adapter. Workspace and model selection live
+// in the Vision database.
+message BailianParaformer {
+  reserved 1, 2, 4, 5, 6;
+  reserved "api_key", "workspace_id", "realtime_model", "file_model", "vocabulary_id";
+
+  string endpoint = 3;
+}
+
+// ASRStartupProbe verifies the configured real-time provider before Vision
+// starts serving traffic. The probe uses an embedded, non-user audio fixture.
+message ASRStartupProbe {
+  bool enabled = 1;
+  google.protobuf.Duration timeout = 2;
 }
 
 message Server {

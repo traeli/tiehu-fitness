@@ -22,8 +22,11 @@ const OperationContentServiceGetExercise = "/content.v1.ContentService/GetExerci
 const OperationContentServiceRecommendExercises = "/content.v1.ContentService/RecommendExercises"
 
 type ContentServiceHTTPServer interface {
+	// GetEquipment GetEquipment 查询已发布的器材详情。
 	GetEquipment(context.Context, *GetEquipmentRequest) (*GetEquipmentResponse, error)
+	// GetExercise GetExercise 查询已发布的动作和教学信息。
 	GetExercise(context.Context, *GetExerciseRequest) (*GetExerciseResponse, error)
+	// RecommendExercises RecommendExercises 查询指定器材适用的已发布动作。
 	RecommendExercises(context.Context, *RecommendExercisesRequest) (*RecommendExercisesResponse, error)
 }
 
@@ -101,8 +104,11 @@ func _ContentService_GetExercise0_HTTP_Handler(srv ContentServiceHTTPServer) fun
 }
 
 type ContentServiceHTTPClient interface {
+	// GetEquipment GetEquipment 查询已发布的器材详情。
 	GetEquipment(ctx context.Context, req *GetEquipmentRequest, opts ...http.CallOption) (rsp *GetEquipmentResponse, err error)
+	// GetExercise GetExercise 查询已发布的动作和教学信息。
 	GetExercise(ctx context.Context, req *GetExerciseRequest, opts ...http.CallOption) (rsp *GetExerciseResponse, err error)
+	// RecommendExercises RecommendExercises 查询指定器材适用的已发布动作。
 	RecommendExercises(ctx context.Context, req *RecommendExercisesRequest, opts ...http.CallOption) (rsp *RecommendExercisesResponse, err error)
 }
 
@@ -114,6 +120,7 @@ func NewContentServiceHTTPClient(client *http.Client) ContentServiceHTTPClient {
 	return &ContentServiceHTTPClientImpl{client}
 }
 
+// GetEquipment GetEquipment 查询已发布的器材详情。
 func (c *ContentServiceHTTPClientImpl) GetEquipment(ctx context.Context, in *GetEquipmentRequest, opts ...http.CallOption) (*GetEquipmentResponse, error) {
 	var out GetEquipmentResponse
 	pattern := "/v1/equipment/{equipment_code}"
@@ -130,6 +137,7 @@ func (c *ContentServiceHTTPClientImpl) GetEquipment(ctx context.Context, in *Get
 	return &out, nil
 }
 
+// GetExercise GetExercise 查询已发布的动作和教学信息。
 func (c *ContentServiceHTTPClientImpl) GetExercise(ctx context.Context, in *GetExerciseRequest, opts ...http.CallOption) (*GetExerciseResponse, error) {
 	var out GetExerciseResponse
 	pattern := "/v1/exercises/{exercise_code}"
@@ -146,6 +154,7 @@ func (c *ContentServiceHTTPClientImpl) GetExercise(ctx context.Context, in *GetE
 	return &out, nil
 }
 
+// RecommendExercises RecommendExercises 查询指定器材适用的已发布动作。
 func (c *ContentServiceHTTPClientImpl) RecommendExercises(ctx context.Context, in *RecommendExercisesRequest, opts ...http.CallOption) (*RecommendExercisesResponse, error) {
 	var out RecommendExercisesResponse
 	pattern := "/v1/equipment/{equipment_code}/exercises"

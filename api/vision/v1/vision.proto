@@ -5,71 +5,108 @@ package vision.v1;
 option go_package = "github.com/tiehu-ai/tiehu-fitness/api/vision/v1;visionv1";
 
 import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 
+// VisionService 提供图片器材识别和视频姿势分析任务能力。
 service VisionService {
+  // RecognizeEquipment 创建图片器材识别任务。
   rpc RecognizeEquipment(RecognizeEquipmentRequest) returns (RecognizeEquipmentResponse) {
     option (google.api.http) = {
       post: "/v1/vision/equipment:recognize"
       body: "*"
     };
   }
+  // AnalyzePosture 创建视频姿势分析任务。
   rpc AnalyzePosture(AnalyzePostureRequest) returns (AnalyzePostureResponse) {
     option (google.api.http) = {
       post: "/v1/vision/posture:analyze"
       body: "*"
     };
   }
+  // GetAnalysisJob 查询异步分析任务的状态和结果。
   rpc GetAnalysisJob(GetAnalysisJobRequest) returns (GetAnalysisJobResponse) {
     option (google.api.http) = {get: "/v1/vision/jobs/{job_id}"};
   }
 }
 
+// AI 分析任务类型。
 enum AnalysisType {
+  // 未指定分析类型。
   ANALYSIS_TYPE_UNSPECIFIED = 0;
+  // 器材识别。
   ANALYSIS_TYPE_EQUIPMENT = 1;
+  // 姿势分析。
   ANALYSIS_TYPE_POSTURE = 2;
 }
 
+// AI 分析任务状态。
 enum AnalysisStatus {
+  // 未指定任务状态。
   ANALYSIS_STATUS_UNSPECIFIED = 0;
+  // 等待处理。
   ANALYSIS_STATUS_PENDING = 1;
+  // 正在处理。
   ANALYSIS_STATUS_PROCESSING = 2;
+  // 处理成功。
   ANALYSIS_STATUS_SUCCEEDED = 3;
+  // 处理失败。
   ANALYSIS_STATUS_FAILED = 4;
 }
 
+// 器材识别参数。
 message RecognizeEquipmentRequest {
-  string image_uri = 1;
-  string user_id = 2;
+  // 已上传图片的对象存储地址。
+  string image_uri = 1 [(google.api.field_behavior) = REQUIRED];
+  // 发起任务的系统内部用户 UUID。
+  string user_id = 2 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 姿势分析参数。
 message AnalyzePostureRequest {
-  string video_uri = 1;
-  string exercise_code = 2;
-  string user_id = 3;
+  // 已上传视频的对象存储地址。
+  string video_uri = 1 [(google.api.field_behavior) = REQUIRED];
+  // 需要分析的标准动作编码。
+  string exercise_code = 2 [(google.api.field_behavior) = REQUIRED];
+  // 发起任务的系统内部用户 UUID。
+  string user_id = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 查询分析任务参数。
 message GetAnalysisJobRequest {
-  string job_id = 1;
+  // AI 分析任务 UUID。
+  string job_id = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// 创建器材识别任务结果。
 message RecognizeEquipmentResponse {
+  // 新创建的异步分析任务。
   AnalysisJob job = 1;
 }
 
+// 创建姿势分析任务结果。
 message AnalyzePostureResponse {
+  // 新创建的异步分析任务。
   AnalysisJob job = 1;
 }
 
+// 查询分析任务结果。
 message GetAnalysisJobResponse {
+  // 当前分析任务。
   AnalysisJob job = 1;
 }
 
+// AI 异步分析任务。
 message AnalysisJob {
+  // 任务 UUID。
   string job_id = 1;
+  // 分析任务类型。
   AnalysisType type = 2;
+  // 当前任务状态。
   AnalysisStatus status = 3;
+  // 被分析的图片或视频地址。
   string media_uri = 4;
+  // 成功后的结构化 JSON 结果；任务完成前为空。
   string result_json = 5;
+  // 失败原因；任务未失败时为空。
   string error_message = 6;
 }

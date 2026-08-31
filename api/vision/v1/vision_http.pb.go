@@ -22,8 +22,11 @@ const OperationVisionServiceGetAnalysisJob = "/vision.v1.VisionService/GetAnalys
 const OperationVisionServiceRecognizeEquipment = "/vision.v1.VisionService/RecognizeEquipment"
 
 type VisionServiceHTTPServer interface {
+	// AnalyzePosture AnalyzePosture 创建视频姿势分析任务。
 	AnalyzePosture(context.Context, *AnalyzePostureRequest) (*AnalyzePostureResponse, error)
+	// GetAnalysisJob GetAnalysisJob 查询异步分析任务的状态和结果。
 	GetAnalysisJob(context.Context, *GetAnalysisJobRequest) (*GetAnalysisJobResponse, error)
+	// RecognizeEquipment RecognizeEquipment 创建图片器材识别任务。
 	RecognizeEquipment(context.Context, *RecognizeEquipmentRequest) (*RecognizeEquipmentResponse, error)
 }
 
@@ -95,8 +98,11 @@ func _VisionService_GetAnalysisJob0_HTTP_Handler(srv VisionServiceHTTPServer) fu
 }
 
 type VisionServiceHTTPClient interface {
+	// AnalyzePosture AnalyzePosture 创建视频姿势分析任务。
 	AnalyzePosture(ctx context.Context, req *AnalyzePostureRequest, opts ...http.CallOption) (rsp *AnalyzePostureResponse, err error)
+	// GetAnalysisJob GetAnalysisJob 查询异步分析任务的状态和结果。
 	GetAnalysisJob(ctx context.Context, req *GetAnalysisJobRequest, opts ...http.CallOption) (rsp *GetAnalysisJobResponse, err error)
+	// RecognizeEquipment RecognizeEquipment 创建图片器材识别任务。
 	RecognizeEquipment(ctx context.Context, req *RecognizeEquipmentRequest, opts ...http.CallOption) (rsp *RecognizeEquipmentResponse, err error)
 }
 
@@ -108,6 +114,7 @@ func NewVisionServiceHTTPClient(client *http.Client) VisionServiceHTTPClient {
 	return &VisionServiceHTTPClientImpl{client}
 }
 
+// AnalyzePosture AnalyzePosture 创建视频姿势分析任务。
 func (c *VisionServiceHTTPClientImpl) AnalyzePosture(ctx context.Context, in *AnalyzePostureRequest, opts ...http.CallOption) (*AnalyzePostureResponse, error) {
 	var out AnalyzePostureResponse
 	pattern := "/v1/vision/posture:analyze"
@@ -125,6 +132,7 @@ func (c *VisionServiceHTTPClientImpl) AnalyzePosture(ctx context.Context, in *An
 	return &out, nil
 }
 
+// GetAnalysisJob GetAnalysisJob 查询异步分析任务的状态和结果。
 func (c *VisionServiceHTTPClientImpl) GetAnalysisJob(ctx context.Context, in *GetAnalysisJobRequest, opts ...http.CallOption) (*GetAnalysisJobResponse, error) {
 	var out GetAnalysisJobResponse
 	pattern := "/v1/vision/jobs/{job_id}"
@@ -141,6 +149,7 @@ func (c *VisionServiceHTTPClientImpl) GetAnalysisJob(ctx context.Context, in *Ge
 	return &out, nil
 }
 
+// RecognizeEquipment RecognizeEquipment 创建图片器材识别任务。
 func (c *VisionServiceHTTPClientImpl) RecognizeEquipment(ctx context.Context, in *RecognizeEquipmentRequest, opts ...http.CallOption) (*RecognizeEquipmentResponse, error) {
 	var out RecognizeEquipmentResponse
 	pattern := "/v1/vision/equipment:recognize"

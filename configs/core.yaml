@@ -8,6 +8,39 @@ server:
 wechat:
   app_id: ${WECHAT_APP_ID:}
   app_secret: ${WECHAT_APP_SECRET:}
+utools:
+  plugin_id: ${UTOOLS_PLUGIN_ID:}
+  plugin_secret: ${UTOOLS_PLUGIN_SECRET:}
+  base_info_endpoint: "https://open.u-tools.cn/baseinfo"
+  request_timeout: 5s
+  response_max_age: 600s
+  allow_test_endpoint: false
+vision_grpc_client:
+  endpoint: ${VISION_GRPC_ENDPOINT:dns:///127.0.0.1:9100}
+  request_timeout: 5s
+  tls_enabled: false
+  tls_server_name: ${VISION_GRPC_TLS_SERVER_NAME:}
+  allow_insecure: true
 auth:
   access_token_ttl: 7200s
   refresh_token_ttl: 2592000s
+database:
+  driver: postgres
+  dsn: ${CORE_DATABASE_DSN:postgres://tiehu:tiehu@127.0.0.1:5432/tiehu?sslmode=disable}
+  max_idle_conns: 10
+  max_open_conns: 50
+  conn_max_lifetime: 3600s
+  conn_max_idle_time: 600s
+redis:
+  addr: ${CORE_REDIS_ADDR:127.0.0.1:6379}
+  username: ${CORE_REDIS_USERNAME:}
+  password: ${CORE_REDIS_PASSWORD:}
+  db: 0
+  dial_timeout: 3s
+  read_timeout: 2s
+  write_timeout: 2s
+  pool_size: 20
+  min_idle_conns: 2
+  tls_enabled: false
+  tls_server_name: ${CORE_REDIS_TLS_SERVER_NAME:}
+  key_prefix: "core:"

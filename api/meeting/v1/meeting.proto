@@ -1,0 +1,398 @@
+syntax = "proto3";
+
+package meeting.v1;
+
+option go_package = "github.com/tiehu-ai/tiehu-fitness/api/meeting/v1;meetingv1";
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// MeetingService 提供当前登录用户的会议控制、额度和最终转写查询能力。
+service MeetingService {
+  // CreateMeeting 创建并开始会议；HTTP 调用必须携带 Idempotency-Key。
+  rpc CreateMeeting(CreateMeetingRequest) returns (CreateMeetingResponse) {
+    option (google.api.http) = {
+      post: "/v1/meetings"
+      body: "*"
+    };
+  }
+
+  // StopMeeting 幂等停止会议；HTTP 调用必须携带 Idempotency-Key。
+  rpc StopMeeting(StopMeetingRequest) returns (StopMeetingResponse) {
+    option (google.api.http) = {
+      post: "/v1/meetings/{meeting_id}:stop"
+      body: "*"
+    };
+  }
+
+  // GetMeeting 查询当前用户拥有的会议及转写阶段状态。
+  rpc GetMeeting(GetMeetingRequest) returns (GetMeetingResponse) {
+    option (google.api.http) = {get: "/v1/meetings/{meeting_id}"};
+  }
+
+  // ListTranscriptSegments 分页查询会议的最终转写片段。
+  rpc ListTranscriptSegments(ListTranscriptSegmentsRequest) returns (ListTranscriptSegmentsResponse) {
+    option (google.api.http) = {get: "/v1/meetings/{meeting_id}/transcript-segments"};
+  }
+
+  // GetMeetingSummary 查询当前会议最新可展示的结构化纪要及生成状态。
+  rpc GetMeetingSummary(GetMeetingSummaryRequest) returns (GetMeetingSummaryResponse) {
+    option (google.api.http) = {get: "/v1/meetings/{meeting_id}/summary"};
+  }
+
+  // RegenerateMeetingSummary 基于当前最终转写版本异步重新生成纪要；HTTP 调用必须携带 Idempotency-Key。
+  rpc RegenerateMeetingSummary(RegenerateMeetingSummaryRequest) returns (RegenerateMeetingSummaryResponse) {
+    option (google.api.http) = {
+      post: "/v1/meetings/{meeting_id}/summary:regenerate"
+      body: "*"
+    };
+  }
+
+  // GetMeetingQuota 查询当前用户在本计费周期的会议额度。
+  rpc GetMeetingQuota(GetMeetingQuotaRequest) returns (GetMeetingQuotaResponse) {
+    option (google.api.http) = {get: "/v1/meeting-quota"};
+  }
+}
+
+// MeetingStatus 表示会议业务生命周期。
+enum MeetingStatus {
+  // 未指定会议状态。
+  MEETING_STATUS_UNSPECIFIED = 0;
+  // 正在录制并接收实时音频。
+  MEETING_STATUS_RECORDING = 1;
+  // 已停止录音，后续处理尚未全部完成。
+  MEETING_STATUS_PROCESSING = 2;
+  // 转写和后续产物均已完成。
+  MEETING_STATUS_COMPLETED = 3;
+  // 部分产物成功，可针对失败阶段重试。
+  MEETING_STATUS_PARTIALLY_COMPLETED = 4;
+  // 没有可用的最终转写。
+  MEETING_STATUS_FAILED = 5;
+  // 会议在录制阶段被取消。
+  MEETING_STATUS_CANCELLED = 6;
+}
+
+// TranscriptionStatus 表示一次会议的实时转写阶段。
+enum TranscriptionStatus {
+  // 未指定转写状态。
+  TRANSCRIPTION_STATUS_UNSPECIFIED = 0;
+  // 等待 vision-service 准备转写会话。
+  TRANSCRIPTION_STATUS_PENDING = 1;
+  // 正在建立业务和 Provider 连接。
+  TRANSCRIPTION_STATUS_CONNECTING = 2;
+  // 正在接收音频并返回实时文本。
+  TRANSCRIPTION_STATUS_STREAMING = 3;
+  // 已停止接收新音频，正在刷新尾部结果。
+  TRANSCRIPTION_STATUS_FINISHING = 4;
+  // 最终转写已完成。
+  TRANSCRIPTION_STATUS_SUCCEEDED = 5;
+  // 转写失败。
+  TRANSCRIPTION_STATUS_FAILED = 6;
+  // 转写由用户或服务取消。
+  TRANSCRIPTION_STATUS_CANCELLED = 7;
+  // 转写会话因超时过期。
+  TRANSCRIPTION_STATUS_EXPIRED = 8;
+}
+
+// MeetingSummaryStatus 表示会议纪要的异步生成阶段。
+enum MeetingSummaryStatus {
+  // 未指定纪要状态。
+  MEETING_SUMMARY_STATUS_UNSPECIFIED = 0;
+  // 当前会议尚未提交纪要任务。
+  MEETING_SUMMARY_STATUS_NOT_STARTED = 1;
+  // 纪要任务已经提交并等待处理。
+  MEETING_SUMMARY_STATUS_PENDING = 2;
+  // LLM Provider 正在生成纪要。
+  MEETING_SUMMARY_STATUS_PROCESSING = 3;
+  // 最新纪要版本生成成功。
+  MEETING_SUMMARY_STATUS_SUCCEEDED = 4;
+  // 最新纪要版本生成失败，可以重试。
+  MEETING_SUMMARY_STATUS_FAILED = 5;
+}
+
+// MeetingActionItemStatus 表示会议待办事项的初始处理状态。
+enum MeetingActionItemStatus {
+  // 尚未指定待办状态。
+  MEETING_ACTION_ITEM_STATUS_UNSPECIFIED = 0;
+  // 待办事项尚未处理。
+  MEETING_ACTION_ITEM_STATUS_PENDING = 1;
+}
+
+// MeetingLanguage 表示用户选择的会议识别语言。
+enum MeetingLanguage {
+  // 未指定语言。
+  MEETING_LANGUAGE_UNSPECIFIED = 0;
+  // 由 ASR 自动识别语言。
+  MEETING_LANGUAGE_AUTO = 1;
+  // 简体中文或中文为主的中英混合会议。
+  MEETING_LANGUAGE_ZH_CN = 2;
+  // 英语会议。
+  MEETING_LANGUAGE_EN_US = 3;
+}
+
+// AudioFormat 表示实时音频的编码格式。
+enum AudioFormat {
+  // 未指定音频格式。
+  AUDIO_FORMAT_UNSPECIFIED = 0;
+  // 有符号 16 bit little-endian 裸 PCM。
+  AUDIO_FORMAT_PCM_S16LE = 1;
+}
+
+// CreateMeetingRequest 是创建会议参数。
+message CreateMeetingRequest {
+  // 识别语言偏好。
+  MeetingLanguage language = 1 [(google.api.field_behavior) = REQUIRED];
+  // 是否在识别完成后继续保留云端原始录音。
+  bool retain_audio = 2;
+  // 用户是否明确同意把音频发送到云端处理；必须为 true。
+  bool transcription_consent = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// CreateMeetingResponse 返回会议和短期实时转写连接参数。
+message CreateMeetingResponse {
+  // 新建或由相同幂等键命中的会议。
+  Meeting meeting = 1;
+  // vision-service 签发的一次性实时转写会话。
+  TranscriptionSession transcription_session = 2;
+}
+
+// StopMeetingRequest 是停止会议参数。
+message StopMeetingRequest {
+  // 当前用户拥有的会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// StopMeetingResponse 返回停止后的最新会议状态。
+message StopMeetingResponse {
+  // 最新会议状态；响应不承诺已经生成会议纪要。
+  Meeting meeting = 1;
+}
+
+// GetMeetingRequest 是查询会议参数。
+message GetMeetingRequest {
+  // 当前用户拥有的会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetMeetingResponse 返回会议详情。
+message GetMeetingResponse {
+  // 当前会议。
+  Meeting meeting = 1;
+}
+
+// ListTranscriptSegmentsRequest 是最终转写片段分页参数。
+message ListTranscriptSegmentsRequest {
+  // 当前用户拥有的会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // 单页条数；服务端必须限制最大值。
+  int32 page_size = 2;
+  // 上一页返回的不透明分页令牌。
+  string page_token = 3;
+}
+
+// ListTranscriptSegmentsResponse 返回一页最终转写片段。
+message ListTranscriptSegmentsResponse {
+  // 按 sequence_no 升序排列的最终片段。
+  repeated TranscriptSegment segments = 1;
+  // 下一页令牌；为空表示没有下一页。
+  string next_page_token = 2;
+}
+
+// GetMeetingSummaryRequest 是查询最新会议纪要的参数。
+message GetMeetingSummaryRequest {
+  // 当前用户拥有的会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetMeetingSummaryResponse 返回纪要状态和最新成功或正在生成的版本。
+message GetMeetingSummaryResponse {
+  // 当前纪要生成状态。
+  MeetingSummaryStatus status = 1;
+  // 最新纪要；尚未成功生成时为空。
+  MeetingSummary summary = 2;
+  // 可安全展示的稳定失败原因；非失败状态时为空。
+  string failure_reason = 3;
+}
+
+// RegenerateMeetingSummaryRequest 是重新生成会议纪要的参数。
+message RegenerateMeetingSummaryRequest {
+  // 当前用户拥有的会议 UUID。
+  string meeting_id = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// RegenerateMeetingSummaryResponse 返回新创建或由幂等键命中的纪要任务。
+message RegenerateMeetingSummaryResponse {
+  // 新任务的当前生成状态。
+  MeetingSummaryStatus status = 1;
+  // 本次重新生成对应的纪要版本。
+  int64 version = 2;
+}
+
+// GetMeetingQuotaRequest 查询当前认证用户的额度，无请求字段。
+message GetMeetingQuotaRequest {}
+
+// GetMeetingQuotaResponse 返回当前用户额度。
+message GetMeetingQuotaResponse {
+  // 当前计费周期的额度快照。
+  MeetingQuota quota = 1;
+}
+
+// Meeting 是 core-service 拥有的会议资源。
+message Meeting {
+  // 会议 UUID。
+  string meeting_id = 1;
+  // 当前会议业务状态。
+  MeetingStatus status = 2;
+  // 当前实时转写阶段状态。
+  TranscriptionStatus transcription_status = 3;
+  // 会议识别语言偏好。
+  MeetingLanguage language = 4;
+  // 是否保留云端原始录音。
+  bool retain_audio = 5;
+  // 本次会议获准发送到 ASR 的最大音频时长。
+  google.protobuf.Duration granted_audio_duration = 6;
+  // 已开始会议的时间。
+  google.protobuf.Timestamp started_at = 7;
+  // 停止录音的时间；尚未停止时为空。
+  google.protobuf.Timestamp stopped_at = 8;
+  // 资源创建时间。
+  google.protobuf.Timestamp created_at = 9;
+  // 资源最后更新时间。
+  google.protobuf.Timestamp updated_at = 10;
+  // 当前会议纪要生成状态。
+  MeetingSummaryStatus summary_status = 11;
+  // 当前对外展示的成功纪要版本；尚无成功纪要时为零。
+  int64 summary_version = 12;
+  // 当前最终转写快照版本。
+  int64 transcript_revision = 13;
+}
+
+// MeetingSummary 是经过服务端校验的版本化结构化会议纪要。
+message MeetingSummary {
+  // 会议 UUID。
+  string meeting_id = 1;
+  // 会议内严格递增的纪要版本。
+  int64 version = 2;
+  // 本纪要使用的最终转写快照版本。
+  int64 source_transcript_revision = 3;
+  // 简短会议主题。
+  string topic = 4;
+  // 会议摘要。
+  string abstract = 5;
+  // 关键讨论内容。
+  repeated string key_discussions = 6;
+  // 已达成的决定。
+  repeated string decisions = 7;
+  // 会议待办事项。
+  repeated MeetingActionItem action_items = 8;
+  // 风险和待确认事项。
+  repeated string risks = 9;
+  // 实际生成该版本的模型名称。
+  string model_name = 10;
+  // 生成该版本的服务端 Prompt 版本。
+  string prompt_version = 11;
+  // 该纪要生成完成的时间。
+  google.protobuf.Timestamp generated_at = 12;
+  // 实际处理该版本的 LLM Provider 标识。
+  string provider = 13;
+  // Provider 报告的输入 token 数；不提供时为零。
+  int64 input_tokens = 14;
+  // Provider 报告的输出 token 数；不提供时为零。
+  int64 output_tokens = 15;
+}
+
+// MeetingActionItem 是会议总结提取出的一个待办事项。
+message MeetingActionItem {
+  // 可空负责人。
+  string assignee = 1;
+  // 明确、可执行的任务描述。
+  string task = 2;
+  // 可空的原文期限；无法可靠解析时不转换为时间戳。
+  string due_text = 3;
+  // 待办事项初始状态。
+  MeetingActionItemStatus status = 4;
+}
+
+// TranscriptionSession 是 uTools 建立实时转写 WebSocket 所需的短期参数。
+message TranscriptionSession {
+  // vision-service 转写会话 UUID。
+  string session_id = 1;
+  // vision-service 的完整 WSS 地址，客户端不得自行拼接域名。
+  string websocket_url = 2;
+  // 仅能消费一次的短期 ticket；不得写入日志或 URL query。
+  string session_ticket = 3;
+  // ticket 到期时间。
+  google.protobuf.Timestamp expires_at = 4;
+  // 本次会话实际接受的实时音频约束。
+  AudioSpec audio = 5;
+  // core-service 为本次 session 预占并授予的最大音频时长。
+  google.protobuf.Duration granted_audio_duration = 6;
+}
+
+// AudioSpec 描述实时音频编码和分片边界。
+message AudioSpec {
+  // 规范化音频格式。
+  AudioFormat format = 1;
+  // 供浏览器和 uTools 选择编码器的标准 MIME。
+  string mime_type = 2;
+  // 采样率，单位 Hz。
+  int32 sample_rate = 3;
+  // 声道数；V1 必须为 1。
+  int32 channels = 4;
+  // 推荐音频分片时长。
+  google.protobuf.Duration chunk_duration = 5;
+  // 单个业务 WebSocket 音频消息允许的最大音频字节数。
+  int32 max_chunk_bytes = 6;
+}
+
+// TranscriptSegment 是已经最终确认、可以持久化的转写片段。
+message TranscriptSegment {
+  // vision-service 生成的稳定片段 ID。
+  string segment_id = 1;
+  // 会议内严格递增的最终片段序号。
+  int64 sequence_no = 2;
+  // 片段相对会议音频的开始偏移。
+  google.protobuf.Duration start_offset = 3;
+  // 片段相对会议音频的结束偏移。
+  google.protobuf.Duration end_offset = 4;
+  // 可空的临时说话人标签；V1 不承诺真实身份。
+  string speaker_label = 5;
+  // 最终转写正文。
+  string content = 6;
+  // 该片段识别出的语言。
+  MeetingLanguage language = 7;
+  // Provider 返回的置信度；Provider 不提供时为空。
+  optional float confidence = 8;
+  // 最终片段生成时间。
+  google.protobuf.Timestamp created_at = 9;
+}
+
+// MeetingQuota 是当前用户在一个计费周期内的额度快照。
+message MeetingQuota {
+  // 当前自然月周期开始时间。
+  google.protobuf.Timestamp period_start = 1;
+  // 当前自然月周期结束时间。
+  google.protobuf.Timestamp period_end = 2;
+  // 当前周期允许的音频总时长；为兼容旧客户端保留，值与 total_limit 相同。
+  google.protobuf.Duration limit = 3;
+  // 已最终结算的音频时长。
+  google.protobuf.Duration consumed = 4;
+  // 已由活跃会议预占但尚未结算的音频时长。
+  google.protobuf.Duration reserved = 5;
+  // 当前仍可预占的音频时长。
+  google.protobuf.Duration remaining = 6;
+  // 单场会议硬上限。
+  google.protobuf.Duration max_meeting_duration = 7;
+  // 单用户允许的活跃会议数。
+  int32 max_concurrent_meetings = 8;
+  // 当前活跃会议数。
+  int32 active_meetings = 9;
+  // 当前周期从默认策略或用户覆盖配置快照得到的基础额度。
+  google.protobuf.Duration base_limit = 10;
+  // 当前周期已支付订单累计增加的额度。
+  google.protobuf.Duration purchased_limit = 11;
+  // 当前周期基础额度与购买额度之和。
+  google.protobuf.Duration total_limit = 12;
+}

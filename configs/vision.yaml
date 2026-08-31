@@ -5,3 +5,78 @@ server:
   grpc:
     addr: 0.0.0.0:9100
     timeout: 30s
+database:
+  driver: postgres
+  dsn: ${VISION_DATABASE_DSN:postgres://tiehu:tiehu@127.0.0.1:5432/tiehu?sslmode=disable}
+  max_idle_conns: 5
+  max_open_conns: 20
+  conn_max_lifetime: 3600s
+  conn_max_idle_time: 600s
+redis:
+  addr: ${VISION_REDIS_ADDR:127.0.0.1:56379}
+  username: ${VISION_REDIS_USERNAME:tiehu_vision}
+  password: ${VISION_REDIS_PASSWORD:tiehu_vision_redis_local_2026}
+  db: 0
+  dial_timeout: 3s
+  read_timeout: 2s
+  write_timeout: 2s
+  pool_size: 50
+  min_idle_conns: 5
+  tls_enabled: false
+  tls_server_name: ${VISION_REDIS_TLS_SERVER_NAME:}
+  key_prefix: "vision:"
+asr:
+  startup_probe:
+    enabled: true
+    timeout: 30s
+  session_timeout: 14400s
+  connect_timeout: 5s
+  read_timeout: 30s
+  write_timeout: 5s
+  finish_timeout: 10s
+  max_concurrent_sessions: 100
+  max_audio_frame_bytes: 6400
+  allow_test_endpoint: false
+  bailian:
+    endpoint: ${BAILIAN_ASR_ENDPOINT:}
+realtime_transcription:
+  websocket_url: ${REALTIME_WEBSOCKET_URL:ws://127.0.0.1:8100/v1/realtime/transcriptions}
+  allow_insecure_loopback: true
+  ticket_ttl: 60s
+  chunk_duration: 0.2s
+  max_queue_chunks: 64
+  allowed_origins:
+    - "http://127.0.0.1:*"
+    - "http://localhost:*"
+    - "utools://*"
+    - "null"
+  handshake_timeout: 10s
+  idle_timeout: 30s
+  write_timeout: 5s
+  max_message_bytes: 16384
+  max_connections: 100
+core_grpc_client:
+  endpoint: ${CORE_GRPC_ENDPOINT:dns:///127.0.0.1:9000}
+  request_timeout: 5s
+  tls_enabled: false
+  tls_server_name: ${CORE_GRPC_TLS_SERVER_NAME:}
+  allow_insecure: true
+transcription_outbox_worker:
+  poll_interval: 0.5s
+  lease_timeout: 30s
+  batch_size: 20
+  max_attempts: 20
+  initial_backoff: 1s
+  max_backoff: 30s
+llm:
+  request_timeout: 120s
+  allow_test_endpoint: false
+  deepseek:
+    endpoint: ${DEEPSEEK_ENDPOINT:https://api.deepseek.com/chat/completions}
+meeting_summary_worker:
+  poll_interval: 1s
+  lease_timeout: 180s
+  batch_size: 2
+  max_attempts: 5
+  initial_backoff: 2s
+  max_backoff: 60s

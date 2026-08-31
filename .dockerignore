@@ -1,0 +1,12 @@
+.git
+.idea
+.vscode
+.DS_Store
+bin
+coverage.out
+*.log
+configs/docker-compose.env
+deploy/.env
+utools-ai-meeting-assistant/node_modules
+utools-ai-meeting-assistant/dist
+utools-ai-meeting-assistant/.native-build

@@ -19,7 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	UserService_Register_FullMethodName             = "/user.v1.UserService/Register"
+	UserService_Login_FullMethodName                = "/user.v1.UserService/Login"
 	UserService_WechatLogin_FullMethodName          = "/user.v1.UserService/WechatLogin"
+	UserService_UToolsLogin_FullMethodName          = "/user.v1.UserService/UToolsLogin"
 	UserService_RefreshToken_FullMethodName         = "/user.v1.UserService/RefreshToken"
 	UserService_Logout_FullMethodName               = "/user.v1.UserService/Logout"
 	UserService_GetFitnessProfile_FullMethodName    = "/user.v1.UserService/GetFitnessProfile"
@@ -32,14 +35,30 @@ const (
 // UserServiceClient is the client API for UserService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// UserService 提供 Web/小程序登录、用户档案、训练计划和打卡能力。
 type UserServiceClient interface {
+	// Register 使用邮箱创建 Web 用户账号并签发登录令牌。
+	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
+	// Login 使用邮箱和密码登录 Web 账号。
+	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
+	// WechatLogin 使用 wx.login 返回的临时 code 登录，首次登录会自动注册。
 	WechatLogin(ctx context.Context, in *WechatLoginRequest, opts ...grpc.CallOption) (*WechatLoginResponse, error)
+	// UToolsLogin 使用 uTools 用户服务端临时令牌登录，首次登录会自动注册。
+	UToolsLogin(ctx context.Context, in *UToolsLoginRequest, opts ...grpc.CallOption) (*UToolsLoginResponse, error)
+	// RefreshToken 轮换刷新令牌并签发一组新令牌。
 	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error)
+	// Logout 撤销当前刷新令牌对应的会话。
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
+	// GetFitnessProfile 查询用户的健身目标和训练偏好。
 	GetFitnessProfile(ctx context.Context, in *GetFitnessProfileRequest, opts ...grpc.CallOption) (*GetFitnessProfileResponse, error)
+	// UpdateFitnessProfile 更新用户的健身目标和训练偏好。
 	UpdateFitnessProfile(ctx context.Context, in *UpdateFitnessProfileRequest, opts ...grpc.CallOption) (*UpdateFitnessProfileResponse, error)
+	// GenerateWorkoutPlan 根据已完成的健身档案生成训练计划。
 	GenerateWorkoutPlan(ctx context.Context, in *GenerateWorkoutPlanRequest, opts ...grpc.CallOption) (*GenerateWorkoutPlanResponse, error)
+	// GetWorkoutPlan 查询指定训练计划。
 	GetWorkoutPlan(ctx context.Context, in *GetWorkoutPlanRequest, opts ...grpc.CallOption) (*GetWorkoutPlanResponse, error)
+	// CheckIn 完成当天打卡并返回当前连续打卡天数。
 	CheckIn(ctx context.Context, in *CheckInRequest, opts ...grpc.CallOption) (*CheckInResponse, error)
 }
 
@@ -51,10 +70,40 @@ func NewUserServiceClient(cc grpc.ClientConnInterface) UserServiceClient {
 	return &userServiceClient{cc}
 }
 
+func (c *userServiceClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterResponse)
+	err := c.cc.Invoke(ctx, UserService_Register_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LoginResponse)
+	err := c.cc.Invoke(ctx, UserService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *userServiceClient) WechatLogin(ctx context.Context, in *WechatLoginRequest, opts ...grpc.CallOption) (*WechatLoginResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(WechatLoginResponse)
 	err := c.cc.Invoke(ctx, UserService_WechatLogin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) UToolsLogin(ctx context.Context, in *UToolsLoginRequest, opts ...grpc.CallOption) (*UToolsLoginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UToolsLoginResponse)
+	err := c.cc.Invoke(ctx, UserService_UToolsLogin_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -134,14 +183,30 @@ func (c *userServiceClient) CheckIn(ctx context.Context, in *CheckInRequest, opt
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
+//
+// UserService 提供 Web/小程序登录、用户档案、训练计划和打卡能力。
 type UserServiceServer interface {
+	// Register 使用邮箱创建 Web 用户账号并签发登录令牌。
+	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
+	// Login 使用邮箱和密码登录 Web 账号。
+	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	// WechatLogin 使用 wx.login 返回的临时 code 登录，首次登录会自动注册。
 	WechatLogin(context.Context, *WechatLoginRequest) (*WechatLoginResponse, error)
+	// UToolsLogin 使用 uTools 用户服务端临时令牌登录，首次登录会自动注册。
+	UToolsLogin(context.Context, *UToolsLoginRequest) (*UToolsLoginResponse, error)
+	// RefreshToken 轮换刷新令牌并签发一组新令牌。
 	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
+	// Logout 撤销当前刷新令牌对应的会话。
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
+	// GetFitnessProfile 查询用户的健身目标和训练偏好。
 	GetFitnessProfile(context.Context, *GetFitnessProfileRequest) (*GetFitnessProfileResponse, error)
+	// UpdateFitnessProfile 更新用户的健身目标和训练偏好。
 	UpdateFitnessProfile(context.Context, *UpdateFitnessProfileRequest) (*UpdateFitnessProfileResponse, error)
+	// GenerateWorkoutPlan 根据已完成的健身档案生成训练计划。
 	GenerateWorkoutPlan(context.Context, *GenerateWorkoutPlanRequest) (*GenerateWorkoutPlanResponse, error)
+	// GetWorkoutPlan 查询指定训练计划。
 	GetWorkoutPlan(context.Context, *GetWorkoutPlanRequest) (*GetWorkoutPlanResponse, error)
+	// CheckIn 完成当天打卡并返回当前连续打卡天数。
 	CheckIn(context.Context, *CheckInRequest) (*CheckInResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
@@ -153,8 +218,17 @@ type UserServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedUserServiceServer struct{}
 
+func (UnimplementedUserServiceServer) Register(context.Context, *RegisterRequest) (*RegisterResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Register not implemented")
+}
+func (UnimplementedUserServiceServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
+}
 func (UnimplementedUserServiceServer) WechatLogin(context.Context, *WechatLoginRequest) (*WechatLoginResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method WechatLogin not implemented")
+}
+func (UnimplementedUserServiceServer) UToolsLogin(context.Context, *UToolsLoginRequest) (*UToolsLoginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UToolsLogin not implemented")
 }
 func (UnimplementedUserServiceServer) RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshToken not implemented")
@@ -198,6 +272,42 @@ func RegisterUserServiceServer(s grpc.ServiceRegistrar, srv UserServiceServer) {
 	s.RegisterService(&UserService_ServiceDesc, srv)
 }
 
+func _UserService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).Register(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_Register_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).Register(ctx, req.(*RegisterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).Login(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_Login_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _UserService_WechatLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WechatLoginRequest)
 	if err := dec(in); err != nil {
@@ -212,6 +322,24 @@ func _UserService_WechatLogin_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(UserServiceServer).WechatLogin(ctx, req.(*WechatLoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_UToolsLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UToolsLoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).UToolsLogin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_UToolsLogin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).UToolsLogin(ctx, req.(*UToolsLoginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -350,8 +478,20 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*UserServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "Register",
+			Handler:    _UserService_Register_Handler,
+		},
+		{
+			MethodName: "Login",
+			Handler:    _UserService_Login_Handler,
+		},
+		{
 			MethodName: "WechatLogin",
 			Handler:    _UserService_WechatLogin_Handler,
+		},
+		{
+			MethodName: "UToolsLogin",
+			Handler:    _UserService_UToolsLogin_Handler,
 		},
 		{
 			MethodName: "RefreshToken",

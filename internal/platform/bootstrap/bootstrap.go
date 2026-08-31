@@ -21,7 +21,9 @@ func Load(path string) (*conf.Bootstrap, error) {
 	c := config.New(
 		config.WithSource(
 			file.NewSource(path),
-			env.NewSource("KRATOS"),
+			// Load process environment so placeholders such as
+			// ${CORE_DATABASE_DSN:} in YAML can be resolved.
+			env.NewSource(),
 		),
 	)
 	defer c.Close()

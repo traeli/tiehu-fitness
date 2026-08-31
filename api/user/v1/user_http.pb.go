@@ -21,32 +21,90 @@ const OperationUserServiceCheckIn = "/user.v1.UserService/CheckIn"
 const OperationUserServiceGenerateWorkoutPlan = "/user.v1.UserService/GenerateWorkoutPlan"
 const OperationUserServiceGetFitnessProfile = "/user.v1.UserService/GetFitnessProfile"
 const OperationUserServiceGetWorkoutPlan = "/user.v1.UserService/GetWorkoutPlan"
+const OperationUserServiceLogin = "/user.v1.UserService/Login"
 const OperationUserServiceLogout = "/user.v1.UserService/Logout"
 const OperationUserServiceRefreshToken = "/user.v1.UserService/RefreshToken"
+const OperationUserServiceRegister = "/user.v1.UserService/Register"
+const OperationUserServiceUToolsLogin = "/user.v1.UserService/UToolsLogin"
 const OperationUserServiceUpdateFitnessProfile = "/user.v1.UserService/UpdateFitnessProfile"
 const OperationUserServiceWechatLogin = "/user.v1.UserService/WechatLogin"
 
 type UserServiceHTTPServer interface {
+	// CheckIn CheckIn 完成当天打卡并返回当前连续打卡天数。
 	CheckIn(context.Context, *CheckInRequest) (*CheckInResponse, error)
+	// GenerateWorkoutPlan GenerateWorkoutPlan 根据已完成的健身档案生成训练计划。
 	GenerateWorkoutPlan(context.Context, *GenerateWorkoutPlanRequest) (*GenerateWorkoutPlanResponse, error)
+	// GetFitnessProfile GetFitnessProfile 查询用户的健身目标和训练偏好。
 	GetFitnessProfile(context.Context, *GetFitnessProfileRequest) (*GetFitnessProfileResponse, error)
+	// GetWorkoutPlan GetWorkoutPlan 查询指定训练计划。
 	GetWorkoutPlan(context.Context, *GetWorkoutPlanRequest) (*GetWorkoutPlanResponse, error)
+	// Login Login 使用邮箱和密码登录 Web 账号。
+	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	// Logout Logout 撤销当前刷新令牌对应的会话。
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
+	// RefreshToken RefreshToken 轮换刷新令牌并签发一组新令牌。
 	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
+	// Register Register 使用邮箱创建 Web 用户账号并签发登录令牌。
+	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
+	// UToolsLogin UToolsLogin 使用 uTools 用户服务端临时令牌登录，首次登录会自动注册。
+	UToolsLogin(context.Context, *UToolsLoginRequest) (*UToolsLoginResponse, error)
+	// UpdateFitnessProfile UpdateFitnessProfile 更新用户的健身目标和训练偏好。
 	UpdateFitnessProfile(context.Context, *UpdateFitnessProfileRequest) (*UpdateFitnessProfileResponse, error)
+	// WechatLogin WechatLogin 使用 wx.login 返回的临时 code 登录，首次登录会自动注册。
 	WechatLogin(context.Context, *WechatLoginRequest) (*WechatLoginResponse, error)
 }
 
 func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r := s.Route("/")
+	r.Handle("POST", "/v1/auth/register", _UserService_Register0_HTTP_Handler(srv))
+	r.Handle("POST", "/v1/auth/login", _UserService_Login0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/auth/wechat/login", _UserService_WechatLogin0_HTTP_Handler(srv))
+	r.Handle("POST", "/v1/auth/utools/login", _UserService_UToolsLogin0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/auth/token:refresh", _UserService_RefreshToken0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/auth/logout", _UserService_Logout0_HTTP_Handler(srv))
 	r.Handle("GET", "/v1/users/{user_id}/fitness-profile", _UserService_GetFitnessProfile0_HTTP_Handler(srv))
-	r.Handle("PUT", "/v1/users/{profile.user_id}/fitness-profile", _UserService_UpdateFitnessProfile0_HTTP_Handler(srv))
+	r.Handle("PUT", "/v1/users/{user_id}/fitness-profile", _UserService_UpdateFitnessProfile0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/users/{user_id}/workout-plans:generate", _UserService_GenerateWorkoutPlan0_HTTP_Handler(srv))
 	r.Handle("GET", "/v1/users/{user_id}/workout-plans/{plan_id}", _UserService_GetWorkoutPlan0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/users/{user_id}/check-ins", _UserService_CheckIn0_HTTP_Handler(srv))
+}
+
+func _UserService_Register0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in RegisterRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceRegister)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.Register(ctx, req.(*RegisterRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RegisterResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _UserService_Login0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in LoginRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceLogin)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.Login(ctx, req.(*LoginRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*LoginResponse)
+		return ctx.Result(200, reply)
+	}
 }
 
 func _UserService_WechatLogin0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -64,6 +122,25 @@ func _UserService_WechatLogin0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx 
 			return err
 		}
 		reply := out.(*WechatLoginResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _UserService_UToolsLogin0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in UToolsLoginRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceUToolsLogin)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.UToolsLogin(ctx, req.(*UToolsLoginRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*UToolsLoginResponse)
 		return ctx.Result(200, reply)
 	}
 }
@@ -156,7 +233,7 @@ func _UserService_UpdateFitnessProfile0_HTTP_Handler(srv UserServiceHTTPServer) 
 func _UserService_GenerateWorkoutPlan0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in GenerateWorkoutPlanRequest
-		if err := ctx.Bind(&in); err != nil {
+		if err := ctx.BindQuery(&in); err != nil {
 			return err
 		}
 		if err := ctx.BindVars(&in); err != nil {
@@ -200,7 +277,7 @@ func _UserService_GetWorkoutPlan0_HTTP_Handler(srv UserServiceHTTPServer) func(c
 func _UserService_CheckIn0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in CheckInRequest
-		if err := ctx.Bind(&in); err != nil {
+		if err := ctx.BindQuery(&in); err != nil {
 			return err
 		}
 		if err := ctx.BindVars(&in); err != nil {
@@ -220,13 +297,27 @@ func _UserService_CheckIn0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http
 }
 
 type UserServiceHTTPClient interface {
+	// CheckIn CheckIn 完成当天打卡并返回当前连续打卡天数。
 	CheckIn(ctx context.Context, req *CheckInRequest, opts ...http.CallOption) (rsp *CheckInResponse, err error)
+	// GenerateWorkoutPlan GenerateWorkoutPlan 根据已完成的健身档案生成训练计划。
 	GenerateWorkoutPlan(ctx context.Context, req *GenerateWorkoutPlanRequest, opts ...http.CallOption) (rsp *GenerateWorkoutPlanResponse, err error)
+	// GetFitnessProfile GetFitnessProfile 查询用户的健身目标和训练偏好。
 	GetFitnessProfile(ctx context.Context, req *GetFitnessProfileRequest, opts ...http.CallOption) (rsp *GetFitnessProfileResponse, err error)
+	// GetWorkoutPlan GetWorkoutPlan 查询指定训练计划。
 	GetWorkoutPlan(ctx context.Context, req *GetWorkoutPlanRequest, opts ...http.CallOption) (rsp *GetWorkoutPlanResponse, err error)
+	// Login Login 使用邮箱和密码登录 Web 账号。
+	Login(ctx context.Context, req *LoginRequest, opts ...http.CallOption) (rsp *LoginResponse, err error)
+	// Logout Logout 撤销当前刷新令牌对应的会话。
 	Logout(ctx context.Context, req *LogoutRequest, opts ...http.CallOption) (rsp *LogoutResponse, err error)
+	// RefreshToken RefreshToken 轮换刷新令牌并签发一组新令牌。
 	RefreshToken(ctx context.Context, req *RefreshTokenRequest, opts ...http.CallOption) (rsp *RefreshTokenResponse, err error)
+	// Register Register 使用邮箱创建 Web 用户账号并签发登录令牌。
+	Register(ctx context.Context, req *RegisterRequest, opts ...http.CallOption) (rsp *RegisterResponse, err error)
+	// UToolsLogin UToolsLogin 使用 uTools 用户服务端临时令牌登录，首次登录会自动注册。
+	UToolsLogin(ctx context.Context, req *UToolsLoginRequest, opts ...http.CallOption) (rsp *UToolsLoginResponse, err error)
+	// UpdateFitnessProfile UpdateFitnessProfile 更新用户的健身目标和训练偏好。
 	UpdateFitnessProfile(ctx context.Context, req *UpdateFitnessProfileRequest, opts ...http.CallOption) (rsp *UpdateFitnessProfileResponse, err error)
+	// WechatLogin WechatLogin 使用 wx.login 返回的临时 code 登录，首次登录会自动注册。
 	WechatLogin(ctx context.Context, req *WechatLoginRequest, opts ...http.CallOption) (rsp *WechatLoginResponse, err error)
 }
 
@@ -238,40 +329,41 @@ func NewUserServiceHTTPClient(client *http.Client) UserServiceHTTPClient {
 	return &UserServiceHTTPClientImpl{client}
 }
 
+// CheckIn CheckIn 完成当天打卡并返回当前连续打卡天数。
 func (c *UserServiceHTTPClientImpl) CheckIn(ctx context.Context, in *CheckInRequest, opts ...http.CallOption) (*CheckInResponse, error) {
 	var out CheckInResponse
 	pattern := "/v1/users/{user_id}/check-ins"
-	path := http.BuildPath(pattern, in)
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
 	opts = append([]http.CallOption{
 		http.Accept("application/protojson"),
-		http.ContentType("application/protojson"),
 		http.Operation(OperationUserServiceCheckIn),
 		http.PathTemplate(pattern),
 	}, opts...)
-	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, nil, &out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
+// GenerateWorkoutPlan GenerateWorkoutPlan 根据已完成的健身档案生成训练计划。
 func (c *UserServiceHTTPClientImpl) GenerateWorkoutPlan(ctx context.Context, in *GenerateWorkoutPlanRequest, opts ...http.CallOption) (*GenerateWorkoutPlanResponse, error) {
 	var out GenerateWorkoutPlanResponse
 	pattern := "/v1/users/{user_id}/workout-plans:generate"
-	path := http.BuildPath(pattern, in)
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
 	opts = append([]http.CallOption{
 		http.Accept("application/protojson"),
-		http.ContentType("application/protojson"),
 		http.Operation(OperationUserServiceGenerateWorkoutPlan),
 		http.PathTemplate(pattern),
 	}, opts...)
-	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, nil, &out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
+// GetFitnessProfile GetFitnessProfile 查询用户的健身目标和训练偏好。
 func (c *UserServiceHTTPClientImpl) GetFitnessProfile(ctx context.Context, in *GetFitnessProfileRequest, opts ...http.CallOption) (*GetFitnessProfileResponse, error) {
 	var out GetFitnessProfileResponse
 	pattern := "/v1/users/{user_id}/fitness-profile"
@@ -288,6 +380,7 @@ func (c *UserServiceHTTPClientImpl) GetFitnessProfile(ctx context.Context, in *G
 	return &out, nil
 }
 
+// GetWorkoutPlan GetWorkoutPlan 查询指定训练计划。
 func (c *UserServiceHTTPClientImpl) GetWorkoutPlan(ctx context.Context, in *GetWorkoutPlanRequest, opts ...http.CallOption) (*GetWorkoutPlanResponse, error) {
 	var out GetWorkoutPlanResponse
 	pattern := "/v1/users/{user_id}/workout-plans/{plan_id}"
@@ -304,6 +397,25 @@ func (c *UserServiceHTTPClientImpl) GetWorkoutPlan(ctx context.Context, in *GetW
 	return &out, nil
 }
 
+// Login Login 使用邮箱和密码登录 Web 账号。
+func (c *UserServiceHTTPClientImpl) Login(ctx context.Context, in *LoginRequest, opts ...http.CallOption) (*LoginResponse, error) {
+	var out LoginResponse
+	pattern := "/v1/auth/login"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationUserServiceLogin),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Logout Logout 撤销当前刷新令牌对应的会话。
 func (c *UserServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutRequest, opts ...http.CallOption) (*LogoutResponse, error) {
 	var out LogoutResponse
 	pattern := "/v1/auth/logout"
@@ -321,6 +433,7 @@ func (c *UserServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutReques
 	return &out, nil
 }
 
+// RefreshToken RefreshToken 轮换刷新令牌并签发一组新令牌。
 func (c *UserServiceHTTPClientImpl) RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...http.CallOption) (*RefreshTokenResponse, error) {
 	var out RefreshTokenResponse
 	pattern := "/v1/auth/token:refresh"
@@ -338,9 +451,46 @@ func (c *UserServiceHTTPClientImpl) RefreshToken(ctx context.Context, in *Refres
 	return &out, nil
 }
 
+// Register Register 使用邮箱创建 Web 用户账号并签发登录令牌。
+func (c *UserServiceHTTPClientImpl) Register(ctx context.Context, in *RegisterRequest, opts ...http.CallOption) (*RegisterResponse, error) {
+	var out RegisterResponse
+	pattern := "/v1/auth/register"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationUserServiceRegister),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UToolsLogin UToolsLogin 使用 uTools 用户服务端临时令牌登录，首次登录会自动注册。
+func (c *UserServiceHTTPClientImpl) UToolsLogin(ctx context.Context, in *UToolsLoginRequest, opts ...http.CallOption) (*UToolsLoginResponse, error) {
+	var out UToolsLoginResponse
+	pattern := "/v1/auth/utools/login"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationUserServiceUToolsLogin),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateFitnessProfile UpdateFitnessProfile 更新用户的健身目标和训练偏好。
 func (c *UserServiceHTTPClientImpl) UpdateFitnessProfile(ctx context.Context, in *UpdateFitnessProfileRequest, opts ...http.CallOption) (*UpdateFitnessProfileResponse, error) {
 	var out UpdateFitnessProfileResponse
-	pattern := "/v1/users/{profile.user_id}/fitness-profile"
+	pattern := "/v1/users/{user_id}/fitness-profile"
 	path := http.BuildPath(pattern, in, http.WithQueryParams(), http.WithOmitFields("profile"))
 	opts = append([]http.CallOption{
 		http.Accept("application/protojson"),
@@ -355,6 +505,7 @@ func (c *UserServiceHTTPClientImpl) UpdateFitnessProfile(ctx context.Context, in
 	return &out, nil
 }
 
+// WechatLogin WechatLogin 使用 wx.login 返回的临时 code 登录，首次登录会自动注册。
 func (c *UserServiceHTTPClientImpl) WechatLogin(ctx context.Context, in *WechatLoginRequest, opts ...http.CallOption) (*WechatLoginResponse, error) {
 	var out WechatLoginResponse
 	pattern := "/v1/auth/wechat/login"

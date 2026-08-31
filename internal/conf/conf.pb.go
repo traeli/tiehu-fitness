@@ -23,12 +23,22 @@ const (
 )
 
 type Bootstrap struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Server        *Server                `protobuf:"bytes,1,opt,name=server,proto3" json:"server,omitempty"`
-	Wechat        *Wechat                `protobuf:"bytes,2,opt,name=wechat,proto3" json:"wechat,omitempty"`
-	Auth          *Auth                  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                     protoimpl.MessageState     `protogen:"open.v1"`
+	Server                    *Server                    `protobuf:"bytes,1,opt,name=server,proto3" json:"server,omitempty"`
+	Wechat                    *Wechat                    `protobuf:"bytes,2,opt,name=wechat,proto3" json:"wechat,omitempty"`
+	Auth                      *Auth                      `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
+	Database                  *Database                  `protobuf:"bytes,4,opt,name=database,proto3" json:"database,omitempty"`
+	Redis                     *Redis                     `protobuf:"bytes,5,opt,name=redis,proto3" json:"redis,omitempty"`
+	Asr                       *ASR                       `protobuf:"bytes,6,opt,name=asr,proto3" json:"asr,omitempty"`
+	Utools                    *UTools                    `protobuf:"bytes,8,opt,name=utools,proto3" json:"utools,omitempty"`
+	VisionGrpcClient          *VisionGRPCClient          `protobuf:"bytes,9,opt,name=vision_grpc_client,json=visionGrpcClient,proto3" json:"vision_grpc_client,omitempty"`
+	RealtimeTranscription     *RealtimeTranscription     `protobuf:"bytes,10,opt,name=realtime_transcription,json=realtimeTranscription,proto3" json:"realtime_transcription,omitempty"`
+	CoreGrpcClient            *CoreGRPCClient            `protobuf:"bytes,11,opt,name=core_grpc_client,json=coreGrpcClient,proto3" json:"core_grpc_client,omitempty"`
+	TranscriptionOutboxWorker *TranscriptionOutboxWorker `protobuf:"bytes,12,opt,name=transcription_outbox_worker,json=transcriptionOutboxWorker,proto3" json:"transcription_outbox_worker,omitempty"`
+	Llm                       *LLM                       `protobuf:"bytes,13,opt,name=llm,proto3" json:"llm,omitempty"`
+	MeetingSummaryWorker      *MeetingSummaryWorker      `protobuf:"bytes,14,opt,name=meeting_summary_worker,json=meetingSummaryWorker,proto3" json:"meeting_summary_worker,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *Bootstrap) Reset() {
@@ -82,6 +92,268 @@ func (x *Bootstrap) GetAuth() *Auth {
 	return nil
 }
 
+func (x *Bootstrap) GetDatabase() *Database {
+	if x != nil {
+		return x.Database
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetRedis() *Redis {
+	if x != nil {
+		return x.Redis
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetAsr() *ASR {
+	if x != nil {
+		return x.Asr
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetUtools() *UTools {
+	if x != nil {
+		return x.Utools
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetVisionGrpcClient() *VisionGRPCClient {
+	if x != nil {
+		return x.VisionGrpcClient
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetRealtimeTranscription() *RealtimeTranscription {
+	if x != nil {
+		return x.RealtimeTranscription
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetCoreGrpcClient() *CoreGRPCClient {
+	if x != nil {
+		return x.CoreGrpcClient
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetTranscriptionOutboxWorker() *TranscriptionOutboxWorker {
+	if x != nil {
+		return x.TranscriptionOutboxWorker
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetLlm() *LLM {
+	if x != nil {
+		return x.Llm
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetMeetingSummaryWorker() *MeetingSummaryWorker {
+	if x != nil {
+		return x.MeetingSummaryWorker
+	}
+	return nil
+}
+
+// LLM contains secret and network settings for meeting-summary adapters.
+// Provider and model selection are versioned in the Vision database.
+type LLM struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	RequestTimeout    *durationpb.Duration   `protobuf:"bytes,4,opt,name=request_timeout,json=requestTimeout,proto3" json:"request_timeout,omitempty"`
+	Deepseek          *DeepSeek              `protobuf:"bytes,8,opt,name=deepseek,proto3" json:"deepseek,omitempty"`
+	AllowTestEndpoint bool                   `protobuf:"varint,9,opt,name=allow_test_endpoint,json=allowTestEndpoint,proto3" json:"allow_test_endpoint,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *LLM) Reset() {
+	*x = LLM{}
+	mi := &file_conf_conf_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LLM) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LLM) ProtoMessage() {}
+
+func (x *LLM) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LLM.ProtoReflect.Descriptor instead.
+func (*LLM) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *LLM) GetRequestTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.RequestTimeout
+	}
+	return nil
+}
+
+func (x *LLM) GetDeepseek() *DeepSeek {
+	if x != nil {
+		return x.Deepseek
+	}
+	return nil
+}
+
+func (x *LLM) GetAllowTestEndpoint() bool {
+	if x != nil {
+		return x.AllowTestEndpoint
+	}
+	return false
+}
+
+// DeepSeek 配置 OpenAI Chat Completions 兼容的 DeepSeek Adapter。
+type DeepSeek struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Endpoint      string                 `protobuf:"bytes,2,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeepSeek) Reset() {
+	*x = DeepSeek{}
+	mi := &file_conf_conf_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeepSeek) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeepSeek) ProtoMessage() {}
+
+func (x *DeepSeek) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeepSeek.ProtoReflect.Descriptor instead.
+func (*DeepSeek) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DeepSeek) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+// MeetingSummaryWorker 配置 vision 内部有界会议纪要 worker。
+type MeetingSummaryWorker struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PollInterval   *durationpb.Duration   `protobuf:"bytes,1,opt,name=poll_interval,json=pollInterval,proto3" json:"poll_interval,omitempty"`
+	LeaseTimeout   *durationpb.Duration   `protobuf:"bytes,2,opt,name=lease_timeout,json=leaseTimeout,proto3" json:"lease_timeout,omitempty"`
+	BatchSize      int32                  `protobuf:"varint,3,opt,name=batch_size,json=batchSize,proto3" json:"batch_size,omitempty"`
+	MaxAttempts    int32                  `protobuf:"varint,4,opt,name=max_attempts,json=maxAttempts,proto3" json:"max_attempts,omitempty"`
+	InitialBackoff *durationpb.Duration   `protobuf:"bytes,5,opt,name=initial_backoff,json=initialBackoff,proto3" json:"initial_backoff,omitempty"`
+	MaxBackoff     *durationpb.Duration   `protobuf:"bytes,6,opt,name=max_backoff,json=maxBackoff,proto3" json:"max_backoff,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MeetingSummaryWorker) Reset() {
+	*x = MeetingSummaryWorker{}
+	mi := &file_conf_conf_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MeetingSummaryWorker) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MeetingSummaryWorker) ProtoMessage() {}
+
+func (x *MeetingSummaryWorker) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MeetingSummaryWorker.ProtoReflect.Descriptor instead.
+func (*MeetingSummaryWorker) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *MeetingSummaryWorker) GetPollInterval() *durationpb.Duration {
+	if x != nil {
+		return x.PollInterval
+	}
+	return nil
+}
+
+func (x *MeetingSummaryWorker) GetLeaseTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.LeaseTimeout
+	}
+	return nil
+}
+
+func (x *MeetingSummaryWorker) GetBatchSize() int32 {
+	if x != nil {
+		return x.BatchSize
+	}
+	return 0
+}
+
+func (x *MeetingSummaryWorker) GetMaxAttempts() int32 {
+	if x != nil {
+		return x.MaxAttempts
+	}
+	return 0
+}
+
+func (x *MeetingSummaryWorker) GetInitialBackoff() *durationpb.Duration {
+	if x != nil {
+		return x.InitialBackoff
+	}
+	return nil
+}
+
+func (x *MeetingSummaryWorker) GetMaxBackoff() *durationpb.Duration {
+	if x != nil {
+		return x.MaxBackoff
+	}
+	return nil
+}
+
 type Wechat struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AppId         string                 `protobuf:"bytes,1,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`
@@ -92,7 +364,7 @@ type Wechat struct {
 
 func (x *Wechat) Reset() {
 	*x = Wechat{}
-	mi := &file_conf_conf_proto_msgTypes[1]
+	mi := &file_conf_conf_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -104,7 +376,7 @@ func (x *Wechat) String() string {
 func (*Wechat) ProtoMessage() {}
 
 func (x *Wechat) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[1]
+	mi := &file_conf_conf_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -117,7 +389,7 @@ func (x *Wechat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Wechat.ProtoReflect.Descriptor instead.
 func (*Wechat) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{1}
+	return file_conf_conf_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Wechat) GetAppId() string {
@@ -134,6 +406,456 @@ func (x *Wechat) GetAppSecret() string {
 	return ""
 }
 
+// UTools configures server-side verification of plugin temporary tokens.
+type UTools struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	PluginId          string                 `protobuf:"bytes,1,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
+	PluginSecret      string                 `protobuf:"bytes,2,opt,name=plugin_secret,json=pluginSecret,proto3" json:"plugin_secret,omitempty"`
+	BaseInfoEndpoint  string                 `protobuf:"bytes,3,opt,name=base_info_endpoint,json=baseInfoEndpoint,proto3" json:"base_info_endpoint,omitempty"`
+	RequestTimeout    *durationpb.Duration   `protobuf:"bytes,4,opt,name=request_timeout,json=requestTimeout,proto3" json:"request_timeout,omitempty"`
+	ResponseMaxAge    *durationpb.Duration   `protobuf:"bytes,5,opt,name=response_max_age,json=responseMaxAge,proto3" json:"response_max_age,omitempty"`
+	AllowTestEndpoint bool                   `protobuf:"varint,6,opt,name=allow_test_endpoint,json=allowTestEndpoint,proto3" json:"allow_test_endpoint,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *UTools) Reset() {
+	*x = UTools{}
+	mi := &file_conf_conf_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UTools) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UTools) ProtoMessage() {}
+
+func (x *UTools) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UTools.ProtoReflect.Descriptor instead.
+func (*UTools) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UTools) GetPluginId() string {
+	if x != nil {
+		return x.PluginId
+	}
+	return ""
+}
+
+func (x *UTools) GetPluginSecret() string {
+	if x != nil {
+		return x.PluginSecret
+	}
+	return ""
+}
+
+func (x *UTools) GetBaseInfoEndpoint() string {
+	if x != nil {
+		return x.BaseInfoEndpoint
+	}
+	return ""
+}
+
+func (x *UTools) GetRequestTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.RequestTimeout
+	}
+	return nil
+}
+
+func (x *UTools) GetResponseMaxAge() *durationpb.Duration {
+	if x != nil {
+		return x.ResponseMaxAge
+	}
+	return nil
+}
+
+func (x *UTools) GetAllowTestEndpoint() bool {
+	if x != nil {
+		return x.AllowTestEndpoint
+	}
+	return false
+}
+
+// VisionGRPCClient configures the core-to-vision internal control channel.
+type VisionGRPCClient struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Endpoint       string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	RequestTimeout *durationpb.Duration   `protobuf:"bytes,2,opt,name=request_timeout,json=requestTimeout,proto3" json:"request_timeout,omitempty"`
+	TlsEnabled     bool                   `protobuf:"varint,3,opt,name=tls_enabled,json=tlsEnabled,proto3" json:"tls_enabled,omitempty"`
+	TlsServerName  string                 `protobuf:"bytes,4,opt,name=tls_server_name,json=tlsServerName,proto3" json:"tls_server_name,omitempty"`
+	AllowInsecure  bool                   `protobuf:"varint,5,opt,name=allow_insecure,json=allowInsecure,proto3" json:"allow_insecure,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *VisionGRPCClient) Reset() {
+	*x = VisionGRPCClient{}
+	mi := &file_conf_conf_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VisionGRPCClient) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VisionGRPCClient) ProtoMessage() {}
+
+func (x *VisionGRPCClient) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VisionGRPCClient.ProtoReflect.Descriptor instead.
+func (*VisionGRPCClient) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *VisionGRPCClient) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *VisionGRPCClient) GetRequestTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.RequestTimeout
+	}
+	return nil
+}
+
+func (x *VisionGRPCClient) GetTlsEnabled() bool {
+	if x != nil {
+		return x.TlsEnabled
+	}
+	return false
+}
+
+func (x *VisionGRPCClient) GetTlsServerName() string {
+	if x != nil {
+		return x.TlsServerName
+	}
+	return ""
+}
+
+func (x *VisionGRPCClient) GetAllowInsecure() bool {
+	if x != nil {
+		return x.AllowInsecure
+	}
+	return false
+}
+
+// CoreGRPCClient configures the vision-to-core internal ingest channel.
+type CoreGRPCClient struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Endpoint       string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	RequestTimeout *durationpb.Duration   `protobuf:"bytes,2,opt,name=request_timeout,json=requestTimeout,proto3" json:"request_timeout,omitempty"`
+	TlsEnabled     bool                   `protobuf:"varint,3,opt,name=tls_enabled,json=tlsEnabled,proto3" json:"tls_enabled,omitempty"`
+	TlsServerName  string                 `protobuf:"bytes,4,opt,name=tls_server_name,json=tlsServerName,proto3" json:"tls_server_name,omitempty"`
+	AllowInsecure  bool                   `protobuf:"varint,5,opt,name=allow_insecure,json=allowInsecure,proto3" json:"allow_insecure,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CoreGRPCClient) Reset() {
+	*x = CoreGRPCClient{}
+	mi := &file_conf_conf_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CoreGRPCClient) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CoreGRPCClient) ProtoMessage() {}
+
+func (x *CoreGRPCClient) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CoreGRPCClient.ProtoReflect.Descriptor instead.
+func (*CoreGRPCClient) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CoreGRPCClient) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *CoreGRPCClient) GetRequestTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.RequestTimeout
+	}
+	return nil
+}
+
+func (x *CoreGRPCClient) GetTlsEnabled() bool {
+	if x != nil {
+		return x.TlsEnabled
+	}
+	return false
+}
+
+func (x *CoreGRPCClient) GetTlsServerName() string {
+	if x != nil {
+		return x.TlsServerName
+	}
+	return ""
+}
+
+func (x *CoreGRPCClient) GetAllowInsecure() bool {
+	if x != nil {
+		return x.AllowInsecure
+	}
+	return false
+}
+
+// TranscriptionOutboxWorker configures reliable final transcript delivery.
+type TranscriptionOutboxWorker struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PollInterval   *durationpb.Duration   `protobuf:"bytes,1,opt,name=poll_interval,json=pollInterval,proto3" json:"poll_interval,omitempty"`
+	LeaseTimeout   *durationpb.Duration   `protobuf:"bytes,2,opt,name=lease_timeout,json=leaseTimeout,proto3" json:"lease_timeout,omitempty"`
+	BatchSize      int32                  `protobuf:"varint,3,opt,name=batch_size,json=batchSize,proto3" json:"batch_size,omitempty"`
+	MaxAttempts    int32                  `protobuf:"varint,4,opt,name=max_attempts,json=maxAttempts,proto3" json:"max_attempts,omitempty"`
+	InitialBackoff *durationpb.Duration   `protobuf:"bytes,5,opt,name=initial_backoff,json=initialBackoff,proto3" json:"initial_backoff,omitempty"`
+	MaxBackoff     *durationpb.Duration   `protobuf:"bytes,6,opt,name=max_backoff,json=maxBackoff,proto3" json:"max_backoff,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TranscriptionOutboxWorker) Reset() {
+	*x = TranscriptionOutboxWorker{}
+	mi := &file_conf_conf_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscriptionOutboxWorker) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscriptionOutboxWorker) ProtoMessage() {}
+
+func (x *TranscriptionOutboxWorker) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscriptionOutboxWorker.ProtoReflect.Descriptor instead.
+func (*TranscriptionOutboxWorker) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TranscriptionOutboxWorker) GetPollInterval() *durationpb.Duration {
+	if x != nil {
+		return x.PollInterval
+	}
+	return nil
+}
+
+func (x *TranscriptionOutboxWorker) GetLeaseTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.LeaseTimeout
+	}
+	return nil
+}
+
+func (x *TranscriptionOutboxWorker) GetBatchSize() int32 {
+	if x != nil {
+		return x.BatchSize
+	}
+	return 0
+}
+
+func (x *TranscriptionOutboxWorker) GetMaxAttempts() int32 {
+	if x != nil {
+		return x.MaxAttempts
+	}
+	return 0
+}
+
+func (x *TranscriptionOutboxWorker) GetInitialBackoff() *durationpb.Duration {
+	if x != nil {
+		return x.InitialBackoff
+	}
+	return nil
+}
+
+func (x *TranscriptionOutboxWorker) GetMaxBackoff() *durationpb.Duration {
+	if x != nil {
+		return x.MaxBackoff
+	}
+	return nil
+}
+
+// RealtimeTranscription configures the client-facing vision WebSocket handoff.
+type RealtimeTranscription struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	WebsocketUrl     string                 `protobuf:"bytes,1,opt,name=websocket_url,json=websocketUrl,proto3" json:"websocket_url,omitempty"`
+	TicketTtl        *durationpb.Duration   `protobuf:"bytes,2,opt,name=ticket_ttl,json=ticketTtl,proto3" json:"ticket_ttl,omitempty"`
+	ChunkDuration    *durationpb.Duration   `protobuf:"bytes,3,opt,name=chunk_duration,json=chunkDuration,proto3" json:"chunk_duration,omitempty"`
+	MaxQueueChunks   int32                  `protobuf:"varint,4,opt,name=max_queue_chunks,json=maxQueueChunks,proto3" json:"max_queue_chunks,omitempty"`
+	AllowedOrigins   []string               `protobuf:"bytes,5,rep,name=allowed_origins,json=allowedOrigins,proto3" json:"allowed_origins,omitempty"`
+	HandshakeTimeout *durationpb.Duration   `protobuf:"bytes,6,opt,name=handshake_timeout,json=handshakeTimeout,proto3" json:"handshake_timeout,omitempty"`
+	IdleTimeout      *durationpb.Duration   `protobuf:"bytes,7,opt,name=idle_timeout,json=idleTimeout,proto3" json:"idle_timeout,omitempty"`
+	WriteTimeout     *durationpb.Duration   `protobuf:"bytes,8,opt,name=write_timeout,json=writeTimeout,proto3" json:"write_timeout,omitempty"`
+	MaxMessageBytes  int64                  `protobuf:"varint,9,opt,name=max_message_bytes,json=maxMessageBytes,proto3" json:"max_message_bytes,omitempty"`
+	MaxConnections   int32                  `protobuf:"varint,10,opt,name=max_connections,json=maxConnections,proto3" json:"max_connections,omitempty"`
+	// allow_insecure_loopback permits ws:// only for localhost development.
+	AllowInsecureLoopback bool `protobuf:"varint,11,opt,name=allow_insecure_loopback,json=allowInsecureLoopback,proto3" json:"allow_insecure_loopback,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *RealtimeTranscription) Reset() {
+	*x = RealtimeTranscription{}
+	mi := &file_conf_conf_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RealtimeTranscription) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RealtimeTranscription) ProtoMessage() {}
+
+func (x *RealtimeTranscription) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RealtimeTranscription.ProtoReflect.Descriptor instead.
+func (*RealtimeTranscription) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RealtimeTranscription) GetWebsocketUrl() string {
+	if x != nil {
+		return x.WebsocketUrl
+	}
+	return ""
+}
+
+func (x *RealtimeTranscription) GetTicketTtl() *durationpb.Duration {
+	if x != nil {
+		return x.TicketTtl
+	}
+	return nil
+}
+
+func (x *RealtimeTranscription) GetChunkDuration() *durationpb.Duration {
+	if x != nil {
+		return x.ChunkDuration
+	}
+	return nil
+}
+
+func (x *RealtimeTranscription) GetMaxQueueChunks() int32 {
+	if x != nil {
+		return x.MaxQueueChunks
+	}
+	return 0
+}
+
+func (x *RealtimeTranscription) GetAllowedOrigins() []string {
+	if x != nil {
+		return x.AllowedOrigins
+	}
+	return nil
+}
+
+func (x *RealtimeTranscription) GetHandshakeTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.HandshakeTimeout
+	}
+	return nil
+}
+
+func (x *RealtimeTranscription) GetIdleTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.IdleTimeout
+	}
+	return nil
+}
+
+func (x *RealtimeTranscription) GetWriteTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.WriteTimeout
+	}
+	return nil
+}
+
+func (x *RealtimeTranscription) GetMaxMessageBytes() int64 {
+	if x != nil {
+		return x.MaxMessageBytes
+	}
+	return 0
+}
+
+func (x *RealtimeTranscription) GetMaxConnections() int32 {
+	if x != nil {
+		return x.MaxConnections
+	}
+	return 0
+}
+
+func (x *RealtimeTranscription) GetAllowInsecureLoopback() bool {
+	if x != nil {
+		return x.AllowInsecureLoopback
+	}
+	return false
+}
+
 type Auth struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	AccessTokenTtl  *durationpb.Duration   `protobuf:"bytes,1,opt,name=access_token_ttl,json=accessTokenTtl,proto3" json:"access_token_ttl,omitempty"`
@@ -144,7 +866,7 @@ type Auth struct {
 
 func (x *Auth) Reset() {
 	*x = Auth{}
-	mi := &file_conf_conf_proto_msgTypes[2]
+	mi := &file_conf_conf_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -156,7 +878,7 @@ func (x *Auth) String() string {
 func (*Auth) ProtoMessage() {}
 
 func (x *Auth) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[2]
+	mi := &file_conf_conf_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -169,7 +891,7 @@ func (x *Auth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Auth.ProtoReflect.Descriptor instead.
 func (*Auth) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{2}
+	return file_conf_conf_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Auth) GetAccessTokenTtl() *durationpb.Duration {
@@ -186,6 +908,443 @@ func (x *Auth) GetRefreshTokenTtl() *durationpb.Duration {
 	return nil
 }
 
+type Database struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Driver          string                 `protobuf:"bytes,1,opt,name=driver,proto3" json:"driver,omitempty"`
+	Dsn             string                 `protobuf:"bytes,2,opt,name=dsn,proto3" json:"dsn,omitempty"`
+	MaxIdleConns    int32                  `protobuf:"varint,3,opt,name=max_idle_conns,json=maxIdleConns,proto3" json:"max_idle_conns,omitempty"`
+	MaxOpenConns    int32                  `protobuf:"varint,4,opt,name=max_open_conns,json=maxOpenConns,proto3" json:"max_open_conns,omitempty"`
+	ConnMaxLifetime *durationpb.Duration   `protobuf:"bytes,5,opt,name=conn_max_lifetime,json=connMaxLifetime,proto3" json:"conn_max_lifetime,omitempty"`
+	ConnMaxIdleTime *durationpb.Duration   `protobuf:"bytes,6,opt,name=conn_max_idle_time,json=connMaxIdleTime,proto3" json:"conn_max_idle_time,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *Database) Reset() {
+	*x = Database{}
+	mi := &file_conf_conf_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Database) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Database) ProtoMessage() {}
+
+func (x *Database) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Database.ProtoReflect.Descriptor instead.
+func (*Database) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *Database) GetDriver() string {
+	if x != nil {
+		return x.Driver
+	}
+	return ""
+}
+
+func (x *Database) GetDsn() string {
+	if x != nil {
+		return x.Dsn
+	}
+	return ""
+}
+
+func (x *Database) GetMaxIdleConns() int32 {
+	if x != nil {
+		return x.MaxIdleConns
+	}
+	return 0
+}
+
+func (x *Database) GetMaxOpenConns() int32 {
+	if x != nil {
+		return x.MaxOpenConns
+	}
+	return 0
+}
+
+func (x *Database) GetConnMaxLifetime() *durationpb.Duration {
+	if x != nil {
+		return x.ConnMaxLifetime
+	}
+	return nil
+}
+
+func (x *Database) GetConnMaxIdleTime() *durationpb.Duration {
+	if x != nil {
+		return x.ConnMaxIdleTime
+	}
+	return nil
+}
+
+// Redis configures one service's isolated connection to the shared Redis
+// infrastructure. Each service must use its own ACL credentials and key prefix.
+type Redis struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Addr          string                 `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
+	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	Password      string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
+	Db            int32                  `protobuf:"varint,4,opt,name=db,proto3" json:"db,omitempty"`
+	DialTimeout   *durationpb.Duration   `protobuf:"bytes,5,opt,name=dial_timeout,json=dialTimeout,proto3" json:"dial_timeout,omitempty"`
+	ReadTimeout   *durationpb.Duration   `protobuf:"bytes,6,opt,name=read_timeout,json=readTimeout,proto3" json:"read_timeout,omitempty"`
+	WriteTimeout  *durationpb.Duration   `protobuf:"bytes,7,opt,name=write_timeout,json=writeTimeout,proto3" json:"write_timeout,omitempty"`
+	PoolSize      int32                  `protobuf:"varint,8,opt,name=pool_size,json=poolSize,proto3" json:"pool_size,omitempty"`
+	MinIdleConns  int32                  `protobuf:"varint,9,opt,name=min_idle_conns,json=minIdleConns,proto3" json:"min_idle_conns,omitempty"`
+	TlsEnabled    bool                   `protobuf:"varint,10,opt,name=tls_enabled,json=tlsEnabled,proto3" json:"tls_enabled,omitempty"`
+	TlsServerName string                 `protobuf:"bytes,11,opt,name=tls_server_name,json=tlsServerName,proto3" json:"tls_server_name,omitempty"`
+	KeyPrefix     string                 `protobuf:"bytes,12,opt,name=key_prefix,json=keyPrefix,proto3" json:"key_prefix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Redis) Reset() {
+	*x = Redis{}
+	mi := &file_conf_conf_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Redis) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Redis) ProtoMessage() {}
+
+func (x *Redis) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Redis.ProtoReflect.Descriptor instead.
+func (*Redis) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *Redis) GetAddr() string {
+	if x != nil {
+		return x.Addr
+	}
+	return ""
+}
+
+func (x *Redis) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *Redis) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+func (x *Redis) GetDb() int32 {
+	if x != nil {
+		return x.Db
+	}
+	return 0
+}
+
+func (x *Redis) GetDialTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.DialTimeout
+	}
+	return nil
+}
+
+func (x *Redis) GetReadTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.ReadTimeout
+	}
+	return nil
+}
+
+func (x *Redis) GetWriteTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.WriteTimeout
+	}
+	return nil
+}
+
+func (x *Redis) GetPoolSize() int32 {
+	if x != nil {
+		return x.PoolSize
+	}
+	return 0
+}
+
+func (x *Redis) GetMinIdleConns() int32 {
+	if x != nil {
+		return x.MinIdleConns
+	}
+	return 0
+}
+
+func (x *Redis) GetTlsEnabled() bool {
+	if x != nil {
+		return x.TlsEnabled
+	}
+	return false
+}
+
+func (x *Redis) GetTlsServerName() string {
+	if x != nil {
+		return x.TlsServerName
+	}
+	return ""
+}
+
+func (x *Redis) GetKeyPrefix() string {
+	if x != nil {
+		return x.KeyPrefix
+	}
+	return ""
+}
+
+// ASR contains bounded process settings for real-time speech recognition.
+// Provider and model selection are versioned in the Vision database.
+type ASR struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	SessionTimeout        *durationpb.Duration   `protobuf:"bytes,2,opt,name=session_timeout,json=sessionTimeout,proto3" json:"session_timeout,omitempty"`
+	ConnectTimeout        *durationpb.Duration   `protobuf:"bytes,3,opt,name=connect_timeout,json=connectTimeout,proto3" json:"connect_timeout,omitempty"`
+	ReadTimeout           *durationpb.Duration   `protobuf:"bytes,4,opt,name=read_timeout,json=readTimeout,proto3" json:"read_timeout,omitempty"`
+	WriteTimeout          *durationpb.Duration   `protobuf:"bytes,5,opt,name=write_timeout,json=writeTimeout,proto3" json:"write_timeout,omitempty"`
+	FinishTimeout         *durationpb.Duration   `protobuf:"bytes,6,opt,name=finish_timeout,json=finishTimeout,proto3" json:"finish_timeout,omitempty"`
+	MaxConcurrentSessions int32                  `protobuf:"varint,7,opt,name=max_concurrent_sessions,json=maxConcurrentSessions,proto3" json:"max_concurrent_sessions,omitempty"`
+	MaxAudioFrameBytes    int32                  `protobuf:"varint,8,opt,name=max_audio_frame_bytes,json=maxAudioFrameBytes,proto3" json:"max_audio_frame_bytes,omitempty"`
+	Bailian               *BailianParaformer     `protobuf:"bytes,9,opt,name=bailian,proto3" json:"bailian,omitempty"`
+	AllowTestEndpoint     bool                   `protobuf:"varint,10,opt,name=allow_test_endpoint,json=allowTestEndpoint,proto3" json:"allow_test_endpoint,omitempty"`
+	StartupProbe          *ASRStartupProbe       `protobuf:"bytes,12,opt,name=startup_probe,json=startupProbe,proto3" json:"startup_probe,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *ASR) Reset() {
+	*x = ASR{}
+	mi := &file_conf_conf_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ASR) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ASR) ProtoMessage() {}
+
+func (x *ASR) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ASR.ProtoReflect.Descriptor instead.
+func (*ASR) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ASR) GetSessionTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.SessionTimeout
+	}
+	return nil
+}
+
+func (x *ASR) GetConnectTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.ConnectTimeout
+	}
+	return nil
+}
+
+func (x *ASR) GetReadTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.ReadTimeout
+	}
+	return nil
+}
+
+func (x *ASR) GetWriteTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.WriteTimeout
+	}
+	return nil
+}
+
+func (x *ASR) GetFinishTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.FinishTimeout
+	}
+	return nil
+}
+
+func (x *ASR) GetMaxConcurrentSessions() int32 {
+	if x != nil {
+		return x.MaxConcurrentSessions
+	}
+	return 0
+}
+
+func (x *ASR) GetMaxAudioFrameBytes() int32 {
+	if x != nil {
+		return x.MaxAudioFrameBytes
+	}
+	return 0
+}
+
+func (x *ASR) GetBailian() *BailianParaformer {
+	if x != nil {
+		return x.Bailian
+	}
+	return nil
+}
+
+func (x *ASR) GetAllowTestEndpoint() bool {
+	if x != nil {
+		return x.AllowTestEndpoint
+	}
+	return false
+}
+
+func (x *ASR) GetStartupProbe() *ASRStartupProbe {
+	if x != nil {
+		return x.StartupProbe
+	}
+	return nil
+}
+
+// BailianParaformer configures secrets and the optional network override for
+// the Alibaba Cloud Model Studio adapter. Workspace and model selection live
+// in the Vision database.
+type BailianParaformer struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Endpoint      string                 `protobuf:"bytes,3,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BailianParaformer) Reset() {
+	*x = BailianParaformer{}
+	mi := &file_conf_conf_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BailianParaformer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BailianParaformer) ProtoMessage() {}
+
+func (x *BailianParaformer) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BailianParaformer.ProtoReflect.Descriptor instead.
+func (*BailianParaformer) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *BailianParaformer) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+// ASRStartupProbe verifies the configured real-time provider before Vision
+// starts serving traffic. The probe uses an embedded, non-user audio fixture.
+type ASRStartupProbe struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Timeout       *durationpb.Duration   `protobuf:"bytes,2,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ASRStartupProbe) Reset() {
+	*x = ASRStartupProbe{}
+	mi := &file_conf_conf_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ASRStartupProbe) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ASRStartupProbe) ProtoMessage() {}
+
+func (x *ASRStartupProbe) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ASRStartupProbe.ProtoReflect.Descriptor instead.
+func (*ASRStartupProbe) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ASRStartupProbe) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *ASRStartupProbe) GetTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.Timeout
+	}
+	return nil
+}
+
 type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Http          *Server_HTTP           `protobuf:"bytes,1,opt,name=http,proto3" json:"http,omitempty"`
@@ -196,7 +1355,7 @@ type Server struct {
 
 func (x *Server) Reset() {
 	*x = Server{}
-	mi := &file_conf_conf_proto_msgTypes[3]
+	mi := &file_conf_conf_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -208,7 +1367,7 @@ func (x *Server) String() string {
 func (*Server) ProtoMessage() {}
 
 func (x *Server) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[3]
+	mi := &file_conf_conf_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -221,7 +1380,7 @@ func (x *Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server.ProtoReflect.Descriptor instead.
 func (*Server) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{3}
+	return file_conf_conf_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Server) GetHttp() *Server_HTTP {
@@ -249,7 +1408,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_conf_conf_proto_msgTypes[4]
+	mi := &file_conf_conf_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -261,7 +1420,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[4]
+	mi := &file_conf_conf_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -274,7 +1433,7 @@ func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_HTTP.ProtoReflect.Descriptor instead.
 func (*Server_HTTP) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{3, 0}
+	return file_conf_conf_proto_rawDescGZIP(), []int{16, 0}
 }
 
 func (x *Server_HTTP) GetNetwork() string {
@@ -309,7 +1468,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_conf_conf_proto_msgTypes[5]
+	mi := &file_conf_conf_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -321,7 +1480,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[5]
+	mi := &file_conf_conf_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -334,7 +1493,7 @@ func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_GRPC.ProtoReflect.Descriptor instead.
 func (*Server_GRPC) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{3, 1}
+	return file_conf_conf_proto_rawDescGZIP(), []int{16, 1}
 }
 
 func (x *Server_GRPC) GetNetwork() string {
@@ -362,19 +1521,131 @@ var File_conf_conf_proto protoreflect.FileDescriptor
 
 const file_conf_conf_proto_rawDesc = "" +
 	"\n" +
-	"\x0fconf/conf.proto\x12\x04conf\x1a\x1egoogle/protobuf/duration.proto\"w\n" +
+	"\x0fconf/conf.proto\x12\x04conf\x1a\x1egoogle/protobuf/duration.proto\"\xee\x05\n" +
 	"\tBootstrap\x12$\n" +
 	"\x06server\x18\x01 \x01(\v2\f.conf.ServerR\x06server\x12$\n" +
 	"\x06wechat\x18\x02 \x01(\v2\f.conf.WechatR\x06wechat\x12\x1e\n" +
 	"\x04auth\x18\x03 \x01(\v2\n" +
-	".conf.AuthR\x04auth\">\n" +
+	".conf.AuthR\x04auth\x12*\n" +
+	"\bdatabase\x18\x04 \x01(\v2\x0e.conf.DatabaseR\bdatabase\x12!\n" +
+	"\x05redis\x18\x05 \x01(\v2\v.conf.RedisR\x05redis\x12\x1b\n" +
+	"\x03asr\x18\x06 \x01(\v2\t.conf.ASRR\x03asr\x12$\n" +
+	"\x06utools\x18\b \x01(\v2\f.conf.UToolsR\x06utools\x12D\n" +
+	"\x12vision_grpc_client\x18\t \x01(\v2\x16.conf.VisionGRPCClientR\x10visionGrpcClient\x12R\n" +
+	"\x16realtime_transcription\x18\n" +
+	" \x01(\v2\x1b.conf.RealtimeTranscriptionR\x15realtimeTranscription\x12>\n" +
+	"\x10core_grpc_client\x18\v \x01(\v2\x14.conf.CoreGRPCClientR\x0ecoreGrpcClient\x12_\n" +
+	"\x1btranscription_outbox_worker\x18\f \x01(\v2\x1f.conf.TranscriptionOutboxWorkerR\x19transcriptionOutboxWorker\x12\x1b\n" +
+	"\x03llm\x18\r \x01(\v2\t.conf.LLMR\x03llm\x12P\n" +
+	"\x16meeting_summary_worker\x18\x0e \x01(\v2\x1a.conf.MeetingSummaryWorkerR\x14meetingSummaryWorkerJ\x04\b\a\x10\bJ\x04\b\x0f\x10\x10R\rmeeting_quotaR\x1eprovider_credential_encryption\"\xa4\x02\n" +
+	"\x03LLM\x12B\n" +
+	"\x0frequest_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0erequestTimeout\x12*\n" +
+	"\bdeepseek\x18\b \x01(\v2\x0e.conf.DeepSeekR\bdeepseek\x12.\n" +
+	"\x13allow_test_endpoint\x18\t \x01(\bR\x11allowTestEndpointJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\bproviderR\x05modelR\x0eprompt_versionR\x19max_input_chars_per_chunkR\n" +
+	"max_chunksR\x11max_output_tokens\"5\n" +
+	"\bDeepSeek\x12\x1a\n" +
+	"\bendpoint\x18\x02 \x01(\tR\bendpointJ\x04\b\x01\x10\x02R\aapi_key\"\xd8\x02\n" +
+	"\x14MeetingSummaryWorker\x12>\n" +
+	"\rpoll_interval\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\fpollInterval\x12>\n" +
+	"\rlease_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\fleaseTimeout\x12\x1d\n" +
+	"\n" +
+	"batch_size\x18\x03 \x01(\x05R\tbatchSize\x12!\n" +
+	"\fmax_attempts\x18\x04 \x01(\x05R\vmaxAttempts\x12B\n" +
+	"\x0finitial_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0einitialBackoff\x12:\n" +
+	"\vmax_backoff\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\n" +
+	"maxBackoff\">\n" +
 	"\x06Wechat\x12\x15\n" +
 	"\x06app_id\x18\x01 \x01(\tR\x05appId\x12\x1d\n" +
 	"\n" +
-	"app_secret\x18\x02 \x01(\tR\tappSecret\"\x92\x01\n" +
+	"app_secret\x18\x02 \x01(\tR\tappSecret\"\xb1\x02\n" +
+	"\x06UTools\x12\x1b\n" +
+	"\tplugin_id\x18\x01 \x01(\tR\bpluginId\x12#\n" +
+	"\rplugin_secret\x18\x02 \x01(\tR\fpluginSecret\x12,\n" +
+	"\x12base_info_endpoint\x18\x03 \x01(\tR\x10baseInfoEndpoint\x12B\n" +
+	"\x0frequest_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0erequestTimeout\x12C\n" +
+	"\x10response_max_age\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0eresponseMaxAge\x12.\n" +
+	"\x13allow_test_endpoint\x18\x06 \x01(\bR\x11allowTestEndpoint\"\xe2\x01\n" +
+	"\x10VisionGRPCClient\x12\x1a\n" +
+	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x12B\n" +
+	"\x0frequest_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0erequestTimeout\x12\x1f\n" +
+	"\vtls_enabled\x18\x03 \x01(\bR\n" +
+	"tlsEnabled\x12&\n" +
+	"\x0ftls_server_name\x18\x04 \x01(\tR\rtlsServerName\x12%\n" +
+	"\x0eallow_insecure\x18\x05 \x01(\bR\rallowInsecure\"\xe0\x01\n" +
+	"\x0eCoreGRPCClient\x12\x1a\n" +
+	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x12B\n" +
+	"\x0frequest_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0erequestTimeout\x12\x1f\n" +
+	"\vtls_enabled\x18\x03 \x01(\bR\n" +
+	"tlsEnabled\x12&\n" +
+	"\x0ftls_server_name\x18\x04 \x01(\tR\rtlsServerName\x12%\n" +
+	"\x0eallow_insecure\x18\x05 \x01(\bR\rallowInsecure\"\xdd\x02\n" +
+	"\x19TranscriptionOutboxWorker\x12>\n" +
+	"\rpoll_interval\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\fpollInterval\x12>\n" +
+	"\rlease_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\fleaseTimeout\x12\x1d\n" +
+	"\n" +
+	"batch_size\x18\x03 \x01(\x05R\tbatchSize\x12!\n" +
+	"\fmax_attempts\x18\x04 \x01(\x05R\vmaxAttempts\x12B\n" +
+	"\x0finitial_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0einitialBackoff\x12:\n" +
+	"\vmax_backoff\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\n" +
+	"maxBackoff\"\xde\x04\n" +
+	"\x15RealtimeTranscription\x12#\n" +
+	"\rwebsocket_url\x18\x01 \x01(\tR\fwebsocketUrl\x128\n" +
+	"\n" +
+	"ticket_ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\tticketTtl\x12@\n" +
+	"\x0echunk_duration\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\rchunkDuration\x12(\n" +
+	"\x10max_queue_chunks\x18\x04 \x01(\x05R\x0emaxQueueChunks\x12'\n" +
+	"\x0fallowed_origins\x18\x05 \x03(\tR\x0eallowedOrigins\x12F\n" +
+	"\x11handshake_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x10handshakeTimeout\x12<\n" +
+	"\fidle_timeout\x18\a \x01(\v2\x19.google.protobuf.DurationR\vidleTimeout\x12>\n" +
+	"\rwrite_timeout\x18\b \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\x12*\n" +
+	"\x11max_message_bytes\x18\t \x01(\x03R\x0fmaxMessageBytes\x12'\n" +
+	"\x0fmax_connections\x18\n" +
+	" \x01(\x05R\x0emaxConnections\x126\n" +
+	"\x17allow_insecure_loopback\x18\v \x01(\bR\x15allowInsecureLoopback\"\x92\x01\n" +
 	"\x04Auth\x12C\n" +
 	"\x10access_token_ttl\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x0eaccessTokenTtl\x12E\n" +
-	"\x11refresh_token_ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0frefreshTokenTtl\"\xac\x02\n" +
+	"\x11refresh_token_ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0frefreshTokenTtl\"\x8f\x02\n" +
+	"\bDatabase\x12\x16\n" +
+	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x10\n" +
+	"\x03dsn\x18\x02 \x01(\tR\x03dsn\x12$\n" +
+	"\x0emax_idle_conns\x18\x03 \x01(\x05R\fmaxIdleConns\x12$\n" +
+	"\x0emax_open_conns\x18\x04 \x01(\x05R\fmaxOpenConns\x12E\n" +
+	"\x11conn_max_lifetime\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxLifetime\x12F\n" +
+	"\x12conn_max_idle_time\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxIdleTime\"\xca\x03\n" +
+	"\x05Redis\x12\x12\n" +
+	"\x04addr\x18\x01 \x01(\tR\x04addr\x12\x1a\n" +
+	"\busername\x18\x02 \x01(\tR\busername\x12\x1a\n" +
+	"\bpassword\x18\x03 \x01(\tR\bpassword\x12\x0e\n" +
+	"\x02db\x18\x04 \x01(\x05R\x02db\x12<\n" +
+	"\fdial_timeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\vdialTimeout\x12<\n" +
+	"\fread_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\vreadTimeout\x12>\n" +
+	"\rwrite_timeout\x18\a \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\x12\x1b\n" +
+	"\tpool_size\x18\b \x01(\x05R\bpoolSize\x12$\n" +
+	"\x0emin_idle_conns\x18\t \x01(\x05R\fminIdleConns\x12\x1f\n" +
+	"\vtls_enabled\x18\n" +
+	" \x01(\bR\n" +
+	"tlsEnabled\x12&\n" +
+	"\x0ftls_server_name\x18\v \x01(\tR\rtlsServerName\x12\x1d\n" +
+	"\n" +
+	"key_prefix\x18\f \x01(\tR\tkeyPrefix\"\x88\x05\n" +
+	"\x03ASR\x12B\n" +
+	"\x0fsession_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0esessionTimeout\x12B\n" +
+	"\x0fconnect_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\x0econnectTimeout\x12<\n" +
+	"\fread_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\vreadTimeout\x12>\n" +
+	"\rwrite_timeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\x12@\n" +
+	"\x0efinish_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\rfinishTimeout\x126\n" +
+	"\x17max_concurrent_sessions\x18\a \x01(\x05R\x15maxConcurrentSessions\x121\n" +
+	"\x15max_audio_frame_bytes\x18\b \x01(\x05R\x12maxAudioFrameBytes\x121\n" +
+	"\abailian\x18\t \x01(\v2\x17.conf.BailianParaformerR\abailian\x12.\n" +
+	"\x13allow_test_endpoint\x18\n" +
+	" \x01(\bR\x11allowTestEndpoint\x12:\n" +
+	"\rstartup_probe\x18\f \x01(\v2\x15.conf.ASRStartupProbeR\fstartupProbeJ\x04\b\x01\x10\x02J\x04\b\v\x10\fR\bproviderR\x19allow_missing_credentials\"\x8f\x01\n" +
+	"\x11BailianParaformer\x12\x1a\n" +
+	"\bendpoint\x18\x03 \x01(\tR\bendpointJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\aapi_keyR\fworkspace_idR\x0erealtime_modelR\n" +
+	"file_modelR\rvocabulary_id\"`\n" +
+	"\x0fASRStartupProbe\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x123\n" +
+	"\atimeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\xac\x02\n" +
 	"\x06Server\x12%\n" +
 	"\x04http\x18\x01 \x01(\v2\x11.conf.Server.HTTPR\x04http\x12%\n" +
 	"\x04grpc\x18\x02 \x01(\v2\x11.conf.Server.GRPCR\x04grpc\x1ai\n" +
@@ -399,31 +1670,86 @@ func file_conf_conf_proto_rawDescGZIP() []byte {
 	return file_conf_conf_proto_rawDescData
 }
 
-var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_conf_conf_proto_goTypes = []any{
-	(*Bootstrap)(nil),           // 0: conf.Bootstrap
-	(*Wechat)(nil),              // 1: conf.Wechat
-	(*Auth)(nil),                // 2: conf.Auth
-	(*Server)(nil),              // 3: conf.Server
-	(*Server_HTTP)(nil),         // 4: conf.Server.HTTP
-	(*Server_GRPC)(nil),         // 5: conf.Server.GRPC
-	(*durationpb.Duration)(nil), // 6: google.protobuf.Duration
+	(*Bootstrap)(nil),                 // 0: conf.Bootstrap
+	(*LLM)(nil),                       // 1: conf.LLM
+	(*DeepSeek)(nil),                  // 2: conf.DeepSeek
+	(*MeetingSummaryWorker)(nil),      // 3: conf.MeetingSummaryWorker
+	(*Wechat)(nil),                    // 4: conf.Wechat
+	(*UTools)(nil),                    // 5: conf.UTools
+	(*VisionGRPCClient)(nil),          // 6: conf.VisionGRPCClient
+	(*CoreGRPCClient)(nil),            // 7: conf.CoreGRPCClient
+	(*TranscriptionOutboxWorker)(nil), // 8: conf.TranscriptionOutboxWorker
+	(*RealtimeTranscription)(nil),     // 9: conf.RealtimeTranscription
+	(*Auth)(nil),                      // 10: conf.Auth
+	(*Database)(nil),                  // 11: conf.Database
+	(*Redis)(nil),                     // 12: conf.Redis
+	(*ASR)(nil),                       // 13: conf.ASR
+	(*BailianParaformer)(nil),         // 14: conf.BailianParaformer
+	(*ASRStartupProbe)(nil),           // 15: conf.ASRStartupProbe
+	(*Server)(nil),                    // 16: conf.Server
+	(*Server_HTTP)(nil),               // 17: conf.Server.HTTP
+	(*Server_GRPC)(nil),               // 18: conf.Server.GRPC
+	(*durationpb.Duration)(nil),       // 19: google.protobuf.Duration
 }
 var file_conf_conf_proto_depIdxs = []int32{
-	3, // 0: conf.Bootstrap.server:type_name -> conf.Server
-	1, // 1: conf.Bootstrap.wechat:type_name -> conf.Wechat
-	2, // 2: conf.Bootstrap.auth:type_name -> conf.Auth
-	6, // 3: conf.Auth.access_token_ttl:type_name -> google.protobuf.Duration
-	6, // 4: conf.Auth.refresh_token_ttl:type_name -> google.protobuf.Duration
-	4, // 5: conf.Server.http:type_name -> conf.Server.HTTP
-	5, // 6: conf.Server.grpc:type_name -> conf.Server.GRPC
-	6, // 7: conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	6, // 8: conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	16, // 0: conf.Bootstrap.server:type_name -> conf.Server
+	4,  // 1: conf.Bootstrap.wechat:type_name -> conf.Wechat
+	10, // 2: conf.Bootstrap.auth:type_name -> conf.Auth
+	11, // 3: conf.Bootstrap.database:type_name -> conf.Database
+	12, // 4: conf.Bootstrap.redis:type_name -> conf.Redis
+	13, // 5: conf.Bootstrap.asr:type_name -> conf.ASR
+	5,  // 6: conf.Bootstrap.utools:type_name -> conf.UTools
+	6,  // 7: conf.Bootstrap.vision_grpc_client:type_name -> conf.VisionGRPCClient
+	9,  // 8: conf.Bootstrap.realtime_transcription:type_name -> conf.RealtimeTranscription
+	7,  // 9: conf.Bootstrap.core_grpc_client:type_name -> conf.CoreGRPCClient
+	8,  // 10: conf.Bootstrap.transcription_outbox_worker:type_name -> conf.TranscriptionOutboxWorker
+	1,  // 11: conf.Bootstrap.llm:type_name -> conf.LLM
+	3,  // 12: conf.Bootstrap.meeting_summary_worker:type_name -> conf.MeetingSummaryWorker
+	19, // 13: conf.LLM.request_timeout:type_name -> google.protobuf.Duration
+	2,  // 14: conf.LLM.deepseek:type_name -> conf.DeepSeek
+	19, // 15: conf.MeetingSummaryWorker.poll_interval:type_name -> google.protobuf.Duration
+	19, // 16: conf.MeetingSummaryWorker.lease_timeout:type_name -> google.protobuf.Duration
+	19, // 17: conf.MeetingSummaryWorker.initial_backoff:type_name -> google.protobuf.Duration
+	19, // 18: conf.MeetingSummaryWorker.max_backoff:type_name -> google.protobuf.Duration
+	19, // 19: conf.UTools.request_timeout:type_name -> google.protobuf.Duration
+	19, // 20: conf.UTools.response_max_age:type_name -> google.protobuf.Duration
+	19, // 21: conf.VisionGRPCClient.request_timeout:type_name -> google.protobuf.Duration
+	19, // 22: conf.CoreGRPCClient.request_timeout:type_name -> google.protobuf.Duration
+	19, // 23: conf.TranscriptionOutboxWorker.poll_interval:type_name -> google.protobuf.Duration
+	19, // 24: conf.TranscriptionOutboxWorker.lease_timeout:type_name -> google.protobuf.Duration
+	19, // 25: conf.TranscriptionOutboxWorker.initial_backoff:type_name -> google.protobuf.Duration
+	19, // 26: conf.TranscriptionOutboxWorker.max_backoff:type_name -> google.protobuf.Duration
+	19, // 27: conf.RealtimeTranscription.ticket_ttl:type_name -> google.protobuf.Duration
+	19, // 28: conf.RealtimeTranscription.chunk_duration:type_name -> google.protobuf.Duration
+	19, // 29: conf.RealtimeTranscription.handshake_timeout:type_name -> google.protobuf.Duration
+	19, // 30: conf.RealtimeTranscription.idle_timeout:type_name -> google.protobuf.Duration
+	19, // 31: conf.RealtimeTranscription.write_timeout:type_name -> google.protobuf.Duration
+	19, // 32: conf.Auth.access_token_ttl:type_name -> google.protobuf.Duration
+	19, // 33: conf.Auth.refresh_token_ttl:type_name -> google.protobuf.Duration
+	19, // 34: conf.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
+	19, // 35: conf.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
+	19, // 36: conf.Redis.dial_timeout:type_name -> google.protobuf.Duration
+	19, // 37: conf.Redis.read_timeout:type_name -> google.protobuf.Duration
+	19, // 38: conf.Redis.write_timeout:type_name -> google.protobuf.Duration
+	19, // 39: conf.ASR.session_timeout:type_name -> google.protobuf.Duration
+	19, // 40: conf.ASR.connect_timeout:type_name -> google.protobuf.Duration
+	19, // 41: conf.ASR.read_timeout:type_name -> google.protobuf.Duration
+	19, // 42: conf.ASR.write_timeout:type_name -> google.protobuf.Duration
+	19, // 43: conf.ASR.finish_timeout:type_name -> google.protobuf.Duration
+	14, // 44: conf.ASR.bailian:type_name -> conf.BailianParaformer
+	15, // 45: conf.ASR.startup_probe:type_name -> conf.ASRStartupProbe
+	19, // 46: conf.ASRStartupProbe.timeout:type_name -> google.protobuf.Duration
+	17, // 47: conf.Server.http:type_name -> conf.Server.HTTP
+	18, // 48: conf.Server.grpc:type_name -> conf.Server.GRPC
+	19, // 49: conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	19, // 50: conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	51, // [51:51] is the sub-list for method output_type
+	51, // [51:51] is the sub-list for method input_type
+	51, // [51:51] is the sub-list for extension type_name
+	51, // [51:51] is the sub-list for extension extendee
+	0,  // [0:51] is the sub-list for field type_name
 }
 
 func init() { file_conf_conf_proto_init() }
@@ -437,7 +1763,7 @@ func file_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conf_conf_proto_rawDesc), len(file_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

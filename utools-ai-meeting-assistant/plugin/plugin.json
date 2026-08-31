@@ -1,0 +1,20 @@
+{
+  "main": "index.html",
+  "logo": "assets/logo.png",
+  "preload": "preload.js",
+  "development": {
+    "main": "http://127.0.0.1:5173/index.html"
+  },
+  "pluginSetting": {
+    "single": true,
+    "height": 640
+  },
+  "features": [
+    {
+      "code": "meeting-assistant",
+      "explain": "开始会议、实时转写并生成 AI 纪要",
+      "icon": "assets/logo.png",
+      "cmds": ["会议助手", "AI会议助手", "会议记录"]
+    }
+  ]
+}
