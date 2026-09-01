@@ -128,7 +128,10 @@ func run() error {
 	meetingService := service.NewMeetingService(meetingUsecase)
 	meetingIngestService := service.NewMeetingIngestInternalService(meetingUsecase)
 
-	httpServer := server.NewHTTPServer(bc.Server, authMiddleware, userService, contentService, meetingService)
+	httpServer, err := server.NewHTTPServer(bc.Server, bc.GetHttpCors(), authMiddleware, userService, contentService, meetingService)
+	if err != nil {
+		return fmt.Errorf("create core HTTP server: %w", err)
+	}
 	grpcServer := server.NewGRPCServer(bc.Server, authMiddleware, userService, contentService, meetingService, meetingIngestService)
 	app := bootstrap.NewApp("tiehu.core", Version, id, logger, grpcServer, httpServer)
 	if err := app.Run(); err != nil {

@@ -37,6 +37,7 @@ type Bootstrap struct {
 	TranscriptionOutboxWorker *TranscriptionOutboxWorker `protobuf:"bytes,12,opt,name=transcription_outbox_worker,json=transcriptionOutboxWorker,proto3" json:"transcription_outbox_worker,omitempty"`
 	Llm                       *LLM                       `protobuf:"bytes,13,opt,name=llm,proto3" json:"llm,omitempty"`
 	MeetingSummaryWorker      *MeetingSummaryWorker      `protobuf:"bytes,14,opt,name=meeting_summary_worker,json=meetingSummaryWorker,proto3" json:"meeting_summary_worker,omitempty"`
+	HttpCors                  *HTTPCORS                  `protobuf:"bytes,16,opt,name=http_cors,json=httpCors,proto3" json:"http_cors,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -158,6 +159,13 @@ func (x *Bootstrap) GetLlm() *LLM {
 func (x *Bootstrap) GetMeetingSummaryWorker() *MeetingSummaryWorker {
 	if x != nil {
 		return x.MeetingSummaryWorker
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetHttpCors() *HTTPCORS {
+	if x != nil {
+		return x.HttpCors
 	}
 	return nil
 }
@@ -1397,6 +1405,51 @@ func (x *Server) GetGrpc() *Server_GRPC {
 	return nil
 }
 
+// HTTPCORS restricts browser and uTools renderer access to Core HTTP APIs.
+type HTTPCORS struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	AllowedOrigins []string               `protobuf:"bytes,1,rep,name=allowed_origins,json=allowedOrigins,proto3" json:"allowed_origins,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *HTTPCORS) Reset() {
+	*x = HTTPCORS{}
+	mi := &file_conf_conf_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HTTPCORS) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HTTPCORS) ProtoMessage() {}
+
+func (x *HTTPCORS) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HTTPCORS.ProtoReflect.Descriptor instead.
+func (*HTTPCORS) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *HTTPCORS) GetAllowedOrigins() []string {
+	if x != nil {
+		return x.AllowedOrigins
+	}
+	return nil
+}
+
 type Server_HTTP struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
@@ -1408,7 +1461,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_conf_conf_proto_msgTypes[17]
+	mi := &file_conf_conf_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1420,7 +1473,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[17]
+	mi := &file_conf_conf_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1468,7 +1521,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_conf_conf_proto_msgTypes[18]
+	mi := &file_conf_conf_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1480,7 +1533,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[18]
+	mi := &file_conf_conf_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1521,7 +1574,7 @@ var File_conf_conf_proto protoreflect.FileDescriptor
 
 const file_conf_conf_proto_rawDesc = "" +
 	"\n" +
-	"\x0fconf/conf.proto\x12\x04conf\x1a\x1egoogle/protobuf/duration.proto\"\xee\x05\n" +
+	"\x0fconf/conf.proto\x12\x04conf\x1a\x1egoogle/protobuf/duration.proto\"\x9b\x06\n" +
 	"\tBootstrap\x12$\n" +
 	"\x06server\x18\x01 \x01(\v2\f.conf.ServerR\x06server\x12$\n" +
 	"\x06wechat\x18\x02 \x01(\v2\f.conf.WechatR\x06wechat\x12\x1e\n" +
@@ -1537,7 +1590,8 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\x10core_grpc_client\x18\v \x01(\v2\x14.conf.CoreGRPCClientR\x0ecoreGrpcClient\x12_\n" +
 	"\x1btranscription_outbox_worker\x18\f \x01(\v2\x1f.conf.TranscriptionOutboxWorkerR\x19transcriptionOutboxWorker\x12\x1b\n" +
 	"\x03llm\x18\r \x01(\v2\t.conf.LLMR\x03llm\x12P\n" +
-	"\x16meeting_summary_worker\x18\x0e \x01(\v2\x1a.conf.MeetingSummaryWorkerR\x14meetingSummaryWorkerJ\x04\b\a\x10\bJ\x04\b\x0f\x10\x10R\rmeeting_quotaR\x1eprovider_credential_encryption\"\xa4\x02\n" +
+	"\x16meeting_summary_worker\x18\x0e \x01(\v2\x1a.conf.MeetingSummaryWorkerR\x14meetingSummaryWorker\x12+\n" +
+	"\thttp_cors\x18\x10 \x01(\v2\x0e.conf.HTTPCORSR\bhttpCorsJ\x04\b\a\x10\bJ\x04\b\x0f\x10\x10R\rmeeting_quotaR\x1eprovider_credential_encryption\"\xa4\x02\n" +
 	"\x03LLM\x12B\n" +
 	"\x0frequest_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0erequestTimeout\x12*\n" +
 	"\bdeepseek\x18\b \x01(\v2\x0e.conf.DeepSeekR\bdeepseek\x12.\n" +
@@ -1656,7 +1710,9 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeoutB6Z4github.com/tiehu-ai/tiehu-fitness/internal/conf;confb\x06proto3"
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"3\n" +
+	"\bHTTPCORS\x12'\n" +
+	"\x0fallowed_origins\x18\x01 \x03(\tR\x0eallowedOriginsB6Z4github.com/tiehu-ai/tiehu-fitness/internal/conf;confb\x06proto3"
 
 var (
 	file_conf_conf_proto_rawDescOnce sync.Once
@@ -1670,7 +1726,7 @@ func file_conf_conf_proto_rawDescGZIP() []byte {
 	return file_conf_conf_proto_rawDescData
 }
 
-var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),                 // 0: conf.Bootstrap
 	(*LLM)(nil),                       // 1: conf.LLM
@@ -1689,9 +1745,10 @@ var file_conf_conf_proto_goTypes = []any{
 	(*BailianParaformer)(nil),         // 14: conf.BailianParaformer
 	(*ASRStartupProbe)(nil),           // 15: conf.ASRStartupProbe
 	(*Server)(nil),                    // 16: conf.Server
-	(*Server_HTTP)(nil),               // 17: conf.Server.HTTP
-	(*Server_GRPC)(nil),               // 18: conf.Server.GRPC
-	(*durationpb.Duration)(nil),       // 19: google.protobuf.Duration
+	(*HTTPCORS)(nil),                  // 17: conf.HTTPCORS
+	(*Server_HTTP)(nil),               // 18: conf.Server.HTTP
+	(*Server_GRPC)(nil),               // 19: conf.Server.GRPC
+	(*durationpb.Duration)(nil),       // 20: google.protobuf.Duration
 }
 var file_conf_conf_proto_depIdxs = []int32{
 	16, // 0: conf.Bootstrap.server:type_name -> conf.Server
@@ -1707,49 +1764,50 @@ var file_conf_conf_proto_depIdxs = []int32{
 	8,  // 10: conf.Bootstrap.transcription_outbox_worker:type_name -> conf.TranscriptionOutboxWorker
 	1,  // 11: conf.Bootstrap.llm:type_name -> conf.LLM
 	3,  // 12: conf.Bootstrap.meeting_summary_worker:type_name -> conf.MeetingSummaryWorker
-	19, // 13: conf.LLM.request_timeout:type_name -> google.protobuf.Duration
-	2,  // 14: conf.LLM.deepseek:type_name -> conf.DeepSeek
-	19, // 15: conf.MeetingSummaryWorker.poll_interval:type_name -> google.protobuf.Duration
-	19, // 16: conf.MeetingSummaryWorker.lease_timeout:type_name -> google.protobuf.Duration
-	19, // 17: conf.MeetingSummaryWorker.initial_backoff:type_name -> google.protobuf.Duration
-	19, // 18: conf.MeetingSummaryWorker.max_backoff:type_name -> google.protobuf.Duration
-	19, // 19: conf.UTools.request_timeout:type_name -> google.protobuf.Duration
-	19, // 20: conf.UTools.response_max_age:type_name -> google.protobuf.Duration
-	19, // 21: conf.VisionGRPCClient.request_timeout:type_name -> google.protobuf.Duration
-	19, // 22: conf.CoreGRPCClient.request_timeout:type_name -> google.protobuf.Duration
-	19, // 23: conf.TranscriptionOutboxWorker.poll_interval:type_name -> google.protobuf.Duration
-	19, // 24: conf.TranscriptionOutboxWorker.lease_timeout:type_name -> google.protobuf.Duration
-	19, // 25: conf.TranscriptionOutboxWorker.initial_backoff:type_name -> google.protobuf.Duration
-	19, // 26: conf.TranscriptionOutboxWorker.max_backoff:type_name -> google.protobuf.Duration
-	19, // 27: conf.RealtimeTranscription.ticket_ttl:type_name -> google.protobuf.Duration
-	19, // 28: conf.RealtimeTranscription.chunk_duration:type_name -> google.protobuf.Duration
-	19, // 29: conf.RealtimeTranscription.handshake_timeout:type_name -> google.protobuf.Duration
-	19, // 30: conf.RealtimeTranscription.idle_timeout:type_name -> google.protobuf.Duration
-	19, // 31: conf.RealtimeTranscription.write_timeout:type_name -> google.protobuf.Duration
-	19, // 32: conf.Auth.access_token_ttl:type_name -> google.protobuf.Duration
-	19, // 33: conf.Auth.refresh_token_ttl:type_name -> google.protobuf.Duration
-	19, // 34: conf.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
-	19, // 35: conf.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
-	19, // 36: conf.Redis.dial_timeout:type_name -> google.protobuf.Duration
-	19, // 37: conf.Redis.read_timeout:type_name -> google.protobuf.Duration
-	19, // 38: conf.Redis.write_timeout:type_name -> google.protobuf.Duration
-	19, // 39: conf.ASR.session_timeout:type_name -> google.protobuf.Duration
-	19, // 40: conf.ASR.connect_timeout:type_name -> google.protobuf.Duration
-	19, // 41: conf.ASR.read_timeout:type_name -> google.protobuf.Duration
-	19, // 42: conf.ASR.write_timeout:type_name -> google.protobuf.Duration
-	19, // 43: conf.ASR.finish_timeout:type_name -> google.protobuf.Duration
-	14, // 44: conf.ASR.bailian:type_name -> conf.BailianParaformer
-	15, // 45: conf.ASR.startup_probe:type_name -> conf.ASRStartupProbe
-	19, // 46: conf.ASRStartupProbe.timeout:type_name -> google.protobuf.Duration
-	17, // 47: conf.Server.http:type_name -> conf.Server.HTTP
-	18, // 48: conf.Server.grpc:type_name -> conf.Server.GRPC
-	19, // 49: conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	19, // 50: conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	51, // [51:51] is the sub-list for method output_type
-	51, // [51:51] is the sub-list for method input_type
-	51, // [51:51] is the sub-list for extension type_name
-	51, // [51:51] is the sub-list for extension extendee
-	0,  // [0:51] is the sub-list for field type_name
+	17, // 13: conf.Bootstrap.http_cors:type_name -> conf.HTTPCORS
+	20, // 14: conf.LLM.request_timeout:type_name -> google.protobuf.Duration
+	2,  // 15: conf.LLM.deepseek:type_name -> conf.DeepSeek
+	20, // 16: conf.MeetingSummaryWorker.poll_interval:type_name -> google.protobuf.Duration
+	20, // 17: conf.MeetingSummaryWorker.lease_timeout:type_name -> google.protobuf.Duration
+	20, // 18: conf.MeetingSummaryWorker.initial_backoff:type_name -> google.protobuf.Duration
+	20, // 19: conf.MeetingSummaryWorker.max_backoff:type_name -> google.protobuf.Duration
+	20, // 20: conf.UTools.request_timeout:type_name -> google.protobuf.Duration
+	20, // 21: conf.UTools.response_max_age:type_name -> google.protobuf.Duration
+	20, // 22: conf.VisionGRPCClient.request_timeout:type_name -> google.protobuf.Duration
+	20, // 23: conf.CoreGRPCClient.request_timeout:type_name -> google.protobuf.Duration
+	20, // 24: conf.TranscriptionOutboxWorker.poll_interval:type_name -> google.protobuf.Duration
+	20, // 25: conf.TranscriptionOutboxWorker.lease_timeout:type_name -> google.protobuf.Duration
+	20, // 26: conf.TranscriptionOutboxWorker.initial_backoff:type_name -> google.protobuf.Duration
+	20, // 27: conf.TranscriptionOutboxWorker.max_backoff:type_name -> google.protobuf.Duration
+	20, // 28: conf.RealtimeTranscription.ticket_ttl:type_name -> google.protobuf.Duration
+	20, // 29: conf.RealtimeTranscription.chunk_duration:type_name -> google.protobuf.Duration
+	20, // 30: conf.RealtimeTranscription.handshake_timeout:type_name -> google.protobuf.Duration
+	20, // 31: conf.RealtimeTranscription.idle_timeout:type_name -> google.protobuf.Duration
+	20, // 32: conf.RealtimeTranscription.write_timeout:type_name -> google.protobuf.Duration
+	20, // 33: conf.Auth.access_token_ttl:type_name -> google.protobuf.Duration
+	20, // 34: conf.Auth.refresh_token_ttl:type_name -> google.protobuf.Duration
+	20, // 35: conf.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
+	20, // 36: conf.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
+	20, // 37: conf.Redis.dial_timeout:type_name -> google.protobuf.Duration
+	20, // 38: conf.Redis.read_timeout:type_name -> google.protobuf.Duration
+	20, // 39: conf.Redis.write_timeout:type_name -> google.protobuf.Duration
+	20, // 40: conf.ASR.session_timeout:type_name -> google.protobuf.Duration
+	20, // 41: conf.ASR.connect_timeout:type_name -> google.protobuf.Duration
+	20, // 42: conf.ASR.read_timeout:type_name -> google.protobuf.Duration
+	20, // 43: conf.ASR.write_timeout:type_name -> google.protobuf.Duration
+	20, // 44: conf.ASR.finish_timeout:type_name -> google.protobuf.Duration
+	14, // 45: conf.ASR.bailian:type_name -> conf.BailianParaformer
+	15, // 46: conf.ASR.startup_probe:type_name -> conf.ASRStartupProbe
+	20, // 47: conf.ASRStartupProbe.timeout:type_name -> google.protobuf.Duration
+	18, // 48: conf.Server.http:type_name -> conf.Server.HTTP
+	19, // 49: conf.Server.grpc:type_name -> conf.Server.GRPC
+	20, // 50: conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	20, // 51: conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	52, // [52:52] is the sub-list for method output_type
+	52, // [52:52] is the sub-list for method input_type
+	52, // [52:52] is the sub-list for extension type_name
+	52, // [52:52] is the sub-list for extension extendee
+	0,  // [0:52] is the sub-list for field type_name
 }
 
 func init() { file_conf_conf_proto_init() }
@@ -1763,7 +1821,7 @@ func file_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conf_conf_proto_rawDesc), len(file_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

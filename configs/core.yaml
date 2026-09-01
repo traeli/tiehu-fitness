@@ -5,6 +5,12 @@ server:
   grpc:
     addr: 0.0.0.0:9000
     timeout: 5s
+http_cors:
+  allowed_origins:
+    - "http://127.0.0.1:5173"
+    - "http://localhost:5173"
+    - "utools://*"
+    - "null"
 wechat:
   app_id: ${WECHAT_APP_ID:}
   app_secret: ${WECHAT_APP_SECRET:}

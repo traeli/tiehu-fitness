@@ -65,7 +65,10 @@ func TestMeetingServiceIsRegisteredOnHTTPAndGRPCServers(t *testing.T) {
 	userService := service.NewUserService(nil)
 	contentService := service.NewContentService(nil)
 	meetingService := service.NewMeetingService(nil)
-	httpServer := NewHTTPServer(&conf.Server{}, auth, userService, contentService, meetingService)
+	httpServer, err := NewHTTPServer(&conf.Server{}, testCORSConfig(), auth, userService, contentService, meetingService)
+	if err != nil {
+		t.Fatal(err)
+	}
 	foundCreateRoute := false
 	if err := httpServer.WalkRoute(func(info kratoshttp.RouteInfo) error {
 		if info.Method == "POST" && info.Path == "/v1/meetings" {
@@ -86,6 +89,10 @@ func TestMeetingServiceIsRegisteredOnHTTPAndGRPCServers(t *testing.T) {
 	if _, ok := grpcServer.GetServiceInfo()["meeting.v1.MeetingIngestInternalService"]; !ok {
 		t.Fatal("meeting ingest internal gRPC service is not registered")
 	}
+}
+
+func testCORSConfig() *conf.HTTPCORS {
+	return &conf.HTTPCORS{AllowedOrigins: []string{"http://127.0.0.1:5173"}}
 }
 
 type selectorHeader map[string]string

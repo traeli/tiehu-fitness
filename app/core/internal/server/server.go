@@ -16,12 +16,20 @@ import (
 
 func NewHTTPServer(
 	c *conf.Server,
+	corsConfig *conf.HTTPCORS,
 	authMiddleware middleware.Middleware,
 	userService *service.UserService,
 	contentService *service.ContentService,
 	meetingService *service.MeetingService,
-) *http.Server {
-	opts := []http.ServerOption{http.Middleware(recovery.Recovery(), protectedAccess(authMiddleware))}
+) (*http.Server, error) {
+	corsFilter, err := newCORSFilter(corsConfig)
+	if err != nil {
+		return nil, err
+	}
+	opts := []http.ServerOption{
+		http.Filter(corsFilter),
+		http.Middleware(recovery.Recovery(), protectedAccess(authMiddleware)),
+	}
 	if hc := c.GetHttp(); hc != nil {
 		if hc.Network != "" {
 			opts = append(opts, http.Network(hc.Network))
@@ -37,7 +45,7 @@ func NewHTTPServer(
 	userv1.RegisterUserServiceHTTPServer(srv, userService)
 	contentv1.RegisterContentServiceHTTPServer(srv, contentService)
 	meetingv1.RegisterMeetingServiceHTTPServer(srv, meetingService)
-	return srv
+	return srv, nil
 }
 
 func NewGRPCServer(

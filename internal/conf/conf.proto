@@ -24,6 +24,7 @@ message Bootstrap {
   MeetingSummaryWorker meeting_summary_worker = 14;
   reserved 15;
   reserved "provider_credential_encryption";
+  HTTPCORS http_cors = 16;
 }
 
 // LLM contains secret and network settings for meeting-summary adapters.
@@ -193,4 +194,9 @@ message Server {
   }
   HTTP http = 1;
   GRPC grpc = 2;
+}
+
+// HTTPCORS restricts browser and uTools renderer access to Core HTTP APIs.
+message HTTPCORS {
+  repeated string allowed_origins = 1;
 }

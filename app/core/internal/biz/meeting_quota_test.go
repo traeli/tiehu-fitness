@@ -11,16 +11,17 @@ import (
 )
 
 type quotaFakeRepo struct {
-	defaultPolicy MeetingQuotaPolicy
-	policyErr     error
-	override      *MeetingQuotaOverride
-	reservation   *MeetingUsageReservation
-	snapshot      *MeetingQuotaSnapshot
-	reserveErr    error
-	reportErr     error
-	finalizeErr   error
-	reserveInput  MeetingQuotaReserveInput
-	finalizeInput MeetingQuotaFinalizeInput
+	defaultPolicy  MeetingQuotaPolicy
+	policyErr      error
+	override       *MeetingQuotaOverride
+	reservation    *MeetingUsageReservation
+	snapshot       *MeetingQuotaSnapshot
+	reserveErr     error
+	reportErr      error
+	finalizeErr    error
+	reserveInput   MeetingQuotaReserveInput
+	finalizeInput  MeetingQuotaFinalizeInput
+	snapshotPolicy MeetingQuotaPolicy
 }
 
 func (r *quotaFakeRepo) GetDefaultPolicy(context.Context) (MeetingQuotaPolicy, error) {
@@ -81,11 +82,30 @@ func (r *quotaFakeRepo) Finalize(_ context.Context, input MeetingQuotaFinalizeIn
 	}, nil
 }
 
-func (r *quotaFakeRepo) GetSnapshot(context.Context, string, MeetingBillingPeriod, MeetingQuotaPolicy, time.Time) (*MeetingQuotaSnapshot, error) {
+func (r *quotaFakeRepo) GetSnapshot(_ context.Context, _ string, _ MeetingBillingPeriod, policy MeetingQuotaPolicy, _ time.Time) (*MeetingQuotaSnapshot, error) {
+	r.snapshotPolicy = policy
 	if r.snapshot == nil {
 		return &MeetingQuotaSnapshot{}, nil
 	}
 	return r.snapshot, nil
+}
+
+func TestMeetingQuotaGetQuotaUsesDefaultPolicyWhenOverrideIsMissing(t *testing.T) {
+	policy, err := NewMeetingQuotaPolicy(validMeetingQuotaConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := &quotaFakeRepo{defaultPolicy: policy}
+	uc, err := NewMeetingQuotaUsecase(repo, repo, &quotaFakeRateLimiter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.GetQuota(context.Background(), uuid.NewString(), time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	if repo.snapshotPolicy != policy {
+		t.Fatalf("snapshot policy = %#v, want default %#v", repo.snapshotPolicy, policy)
+	}
 }
 
 func (r *quotaFakeRepo) ListExpiredReservations(context.Context, time.Time, int) ([]*MeetingUsageReservation, error) {
