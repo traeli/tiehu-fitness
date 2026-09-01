@@ -12,6 +12,7 @@ export type MeetingErrorCode =
   | "UTOOLS_AUTH_NOT_CONFIGURED"
   | "MEETING_QUOTA_EXCEEDED"
   | "TRANSCRIPTION_SESSION_EXPIRED"
+  | "TRANSCRIPTION_SESSION_READY_TIMEOUT"
   | "NETWORK_UNAVAILABLE"
   | "EXPORT_FAILED"
   | "UNKNOWN_ERROR";
@@ -104,6 +105,14 @@ function mapRealtimeError(
   failedAction?: FailedMeetingAction,
 ): MeetingErrorInfo {
   switch (error.code) {
+    case "TRANSCRIPTION_SESSION_READY_TIMEOUT":
+      return {
+        code: "TRANSCRIPTION_SESSION_READY_TIMEOUT",
+        title: "实时转写准备超时",
+        message: error.message,
+        retryable: true,
+        failedAction,
+      };
     case "MEETING_QUOTA_EXCEEDED":
       return {
         code: "MEETING_QUOTA_EXCEEDED",

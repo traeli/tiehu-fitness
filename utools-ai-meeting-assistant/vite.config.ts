@@ -1,12 +1,27 @@
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath, URL } from "node:url";
 
 import vue from "@vitejs/plugin-vue";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
-export default defineConfig({
+const productionManifestPlugin = (): Plugin => ({
+  name: "production-utools-manifest",
+  apply: "build",
+  async closeBundle() {
+    const manifestPath = fileURLToPath(new URL("./dist/plugin.json", import.meta.url));
+    const manifest: unknown = JSON.parse(await readFile(manifestPath, "utf8"));
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+      throw new Error("dist/plugin.json must contain a JSON object");
+    }
+    Reflect.deleteProperty(manifest, "development");
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  },
+});
+
+export default defineConfig(({ mode }) => ({
   base: "./",
   publicDir: "plugin",
-  plugins: [vue()],
+  plugins: [vue(), ...(mode === "production" ? [productionManifestPlugin()] : [])],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -27,6 +42,6 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: mode !== "production",
   },
-});
+}));

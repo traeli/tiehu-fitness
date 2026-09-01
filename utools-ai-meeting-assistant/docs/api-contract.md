@@ -7,7 +7,7 @@ Proto JSON 使用 lowerCamelCase 字段和完整 enum 名称；客户端 HTTP ad
 ## 1. 环境
 
 ```dotenv
-VITE_API_BASE_URL=https://api.example.com
+VITE_API_BASE_URL=https://dsh.nutrilens.cloud
 VITE_USE_MOCK_API=false
 ```
 

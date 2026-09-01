@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/infrastructure/api/apiClient";
 import { AudioCaptureError } from "@/infrastructure/audio/microphoneRecorder";
+import { RealtimeTranscriptionError } from "@/infrastructure/realtime/transcriptionClient";
 
 import { toMeetingError } from "./meetingError";
 
@@ -52,6 +53,22 @@ describe("meeting error mapping", () => {
 
     expect(result.code).toBe("SYSTEM_AUDIO_PERMISSION_DENIED");
     expect(result.title).toBe("无法录制电脑音频");
+    expect(result.failedAction).toBe("start");
+  });
+
+  it("keeps realtime session preparation timeout distinct from unknown failures", () => {
+    const result = toMeetingError(
+      new RealtimeTranscriptionError(
+        "TRANSCRIPTION_SESSION_READY_TIMEOUT",
+        "实时转写服务在 45 秒内未完成会话准备，请稍后重试。",
+        true,
+      ),
+      "start",
+    );
+
+    expect(result.code).toBe("TRANSCRIPTION_SESSION_READY_TIMEOUT");
+    expect(result.title).toBe("实时转写准备超时");
+    expect(result.retryable).toBe(true);
     expect(result.failedAction).toBe("start");
   });
 });

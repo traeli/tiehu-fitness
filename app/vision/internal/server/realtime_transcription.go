@@ -15,6 +15,7 @@ import (
 	"time"
 
 	kratoshttp "github.com/go-kratos/kratos/v3/transport/http"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/tiehu-ai/tiehu-fitness/app/vision/internal/service"
 	"github.com/tiehu-ai/tiehu-fitness/internal/conf"
@@ -109,6 +110,8 @@ type finishResult struct {
 func (h *RealtimeWebSocketHandler) Handle(httpContext kratoshttp.Context) (handlerErr error) {
 	request := httpContext.Request()
 	response := httpContext.Response()
+	connectionStartedAt := time.Now()
+	connectionID := uuid.NewString()
 	select {
 	case <-h.shutdownCtx.Done():
 		http.Error(response, "realtime service is shutting down", http.StatusServiceUnavailable)
@@ -147,6 +150,8 @@ func (h *RealtimeWebSocketHandler) Handle(httpContext kratoshttp.Context) (handl
 
 	conn, err := h.upgrader.Upgrade(response, request, nil)
 	if err != nil {
+		h.logger.Warn("realtime websocket upgrade failed", "connection_id", connectionID,
+			"origin", request.Header.Get("Origin"), "error", err)
 		return nil
 	}
 	if !h.trackConnection(conn) {
@@ -181,21 +186,32 @@ func (h *RealtimeWebSocketHandler) Handle(httpContext kratoshttp.Context) (handl
 	}
 	messageType, payload, err := conn.ReadMessage()
 	if err != nil {
+		h.logger.Warn("realtime websocket start message unavailable",
+			"connection_id", connectionID, "duration", time.Since(connectionStartedAt), "error", err)
 		return nil
 	}
 	if messageType != websocket.TextMessage {
 		_ = h.writeJSON(conn, service.RealtimeErrorFrom(service.RealtimeProtocolViolation("first message must be text"), 0))
 		return nil
 	}
+	h.logger.Info("realtime transcription session preparation started", "connection_id", connectionID)
 	realtimeSession, ready, err := h.service.Start(connectionCtx, payload)
 	if err != nil {
+		h.logger.Error("realtime transcription session preparation failed",
+			"connection_id", connectionID, "duration", time.Since(connectionStartedAt), "error", err)
 		_ = h.writeJSON(conn, service.RealtimeErrorFrom(err, 0))
 		return nil
 	}
 	if err := h.writeJSON(conn, ready); err != nil {
+		h.logger.Warn("realtime transcription session ready delivery failed",
+			"connection_id", connectionID, "session_id", realtimeSession.SessionID(),
+			"duration", time.Since(connectionStartedAt), "error", err)
 		h.cancelDisconnected(connectionCtx, realtimeSession)
 		return nil
 	}
+	h.logger.Info("realtime transcription session ready",
+		"connection_id", connectionID, "session_id", realtimeSession.SessionID(),
+		"duration", time.Since(connectionStartedAt))
 	events, err := realtimeSession.Events()
 	if err != nil {
 		_ = h.writeJSON(conn, service.RealtimeErrorFrom(err, realtimeSession.LastACKSequence()))

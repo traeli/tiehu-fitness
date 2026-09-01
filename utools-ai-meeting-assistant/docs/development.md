@@ -109,6 +109,15 @@ make run-core
 `.env.utools-local` 的直连地址，否则 `127.0.0.1:5173 -> 127.0.0.1:8000` 会触发
 CORS `OPTIONS` 预检。
 
+本地 uTools 直接连接已部署的线上服务时运行：
+
+```bash
+npm run dev:utools:online
+```
+
+该命令读取 `.env.production` 并连接 `https://dsh.nutrilens.cloud`，仍从源码目录的
+`plugin/plugin.json` 加载 Vite 热更新页面。它不会切换到 Mock 或合成音频。
+
 需要生成可打包目录时执行：
 
 ```bash
@@ -150,14 +159,18 @@ npm run native:smoke
 
 ## 5. 真实后端联调
 
-生产构建环境设置：
+生产环境已经由 `.env.production` 固定为：
 
 ```dotenv
-VITE_API_BASE_URL=https://your-api-host
+VITE_API_BASE_URL=https://dsh.nutrilens.cloud
 VITE_USE_MOCK_API=false
+VITE_USE_SYNTHETIC_AUDIO=false
 ```
 
-然后运行 `npm run build:production`。不要把生产地址或凭证写入仓库中的本地联调配置。
+运行 `npm run build:production`。生产 API 地址属于公开客户端配置，不包含服务端凭据；
+uTools plugin secret、百炼和 DeepSeek API Key 仍然只能保留在服务端。生产构建会删除
+`dist/plugin.json` 的 `development` 字段，uTools 开发者工具测试构建目录时不会再访问
+本地 Vite 端口。
 
 检查：
 

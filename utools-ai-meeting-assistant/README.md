@@ -68,6 +68,15 @@ npm run dev:utools
 设备故障诊断，不是正常测试步骤。热更新模式通过同源 `/api` 代理访问本地 core，
 不会向 `127.0.0.1:8000` 发送浏览器 CORS 预检请求。
 
+本地 uTools 直接连接线上后端时，仍选择 `plugin/plugin.json`，改为运行：
+
+```bash
+npm run dev:utools:online
+```
+
+该命令使用 `.env.production` 中的 `https://dsh.nutrilens.cloud`，保留 Vite 热更新，
+同时启用真实系统音频和麦克风。
+
 不要直接在 Chrome 中打开 `http://127.0.0.1:5173/` 测试系统音频。Vite 只负责提供
 页面，ScreenCaptureKit/WASAPI 由 uTools preload 启动；必须在 uTools 中执行“会议助手”
 指令打开页面。标题栏环境标识应显示 `API · main`，显示 `API · browser` 就说明仍在
@@ -103,12 +112,16 @@ PowerShell 中安装“使用 C++ 的桌面开发”，并为当前架构生成 
 发布包必须同时包含 `darwin-arm64`、`darwin-x64`、`win32-x64`，以及计划支持
 Windows on ARM 时的 `win32-arm64` 二进制。
 
-`npm run build` 使用 `.env.utools-local`，直接连接 `http://127.0.0.1:8000`，不经过 Vite 代理。生产构建使用 `npm run build:production`，并在构建环境设置：
+`npm run build` 使用 `.env.utools-local`，直接连接 `http://127.0.0.1:8000`，不经过 Vite 代理。生产构建执行：
 
-```dotenv
-VITE_API_BASE_URL=https://api.example.com
-VITE_USE_MOCK_API=false
+```bash
+npm run build:production
 ```
+
+生产配置由 `.env.production` 提供，当前 API 地址为
+`https://dsh.nutrilens.cloud`，Mock 和合成音频均关闭。生产构建还会从
+`dist/plugin.json` 删除仅供 Vite 热更新使用的 `development` 入口，确保 uTools 加载
+构建后的 `index.html`，而不是访问 `127.0.0.1:5173`。
 
 ## 文档
 

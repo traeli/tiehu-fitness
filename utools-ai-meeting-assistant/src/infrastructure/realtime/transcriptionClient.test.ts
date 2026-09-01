@@ -185,6 +185,39 @@ describe("TranscriptionClient", () => {
     expect(errors).toHaveLength(1);
     client.close();
   });
+
+  it("returns a stable error when production session preparation exceeds its bound", async () => {
+    vi.useFakeTimers();
+    try {
+      const errors: Error[] = [];
+      const client = new TranscriptionClient({
+        url: "wss://vision.example.com/v1/realtime/transcriptions",
+        sessionTicket: "slow-session-ticket",
+        audio: {
+          mimeType: "audio/pcm;rate=16000",
+          sampleRate: 16_000,
+          channels: 1,
+          chunkDurationMs: 200,
+        },
+        onSegment: () => undefined,
+        onError: (error) => errors.push(error),
+        onConnectionStateChange: () => undefined,
+      });
+
+      const connecting = client.connect();
+      requiredSocket().emitOpen();
+      const rejection = expect(connecting).rejects.toMatchObject({
+        code: "TRANSCRIPTION_SESSION_READY_TIMEOUT",
+        retryable: true,
+      });
+      await vi.advanceTimersByTimeAsync(45_000);
+      await rejection;
+      expect(errors).toHaveLength(1);
+      expect(requiredSocket().readyState).toBe(FakeWebSocket.CLOSED);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 function requiredSocket(): FakeWebSocket {

@@ -24,7 +24,10 @@ interface ServerMessage {
 
 const protocolVersion = 1;
 const pcmMIMEType = "audio/pcm;rate=16000";
-const connectionTimeoutMs = 10_000;
+// A production Paraformer session may use up to 5 seconds to connect and
+// 30 seconds to receive task-started. Keep a bounded client-side margin for
+// the public WSS hop and Vision persistence work.
+const connectionTimeoutMs = 45_000;
 const finishTimeoutMs = 15_000;
 const heartbeatIntervalMs = 10_000;
 const heartbeatTimeoutMs = 10_000;
@@ -81,7 +84,11 @@ export class TranscriptionClient {
       this.#connectReject = reject;
     });
     this.#connectTimer = window.setTimeout(() => {
-      this.#failConnection(new Error("实时转写会话准备超时"));
+      this.#failConnection(new RealtimeTranscriptionError(
+        "TRANSCRIPTION_SESSION_READY_TIMEOUT",
+        "实时转写服务在 45 秒内未完成会话准备，请稍后重试。",
+        true,
+      ));
     }, connectionTimeoutMs);
 
     socket.addEventListener("open", () => {
