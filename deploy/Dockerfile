@@ -2,6 +2,10 @@
 
 FROM golang:1.25-alpine AS source
 WORKDIR /src
+ARG GOPROXY=https://goproxy.cn,direct
+ARG GOSUMDB=sum.golang.google.cn
+ENV GOPROXY=${GOPROXY} \
+    GOSUMDB=${GOSUMDB}
 RUN apk add --no-cache ca-certificates git
 COPY go.mod go.sum ./
 RUN go mod download

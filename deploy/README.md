@@ -66,6 +66,11 @@ wss://vision.example.com/v1/realtime/transcriptions
 Use `deploy/nginx.conf.example` with host Nginx/Certbot. The Compose ports bind
 to `127.0.0.1` by default so only the reverse proxy can reach them.
 
+Image builds default to `GOPROXY=https://goproxy.cn,direct` and
+`GOSUMDB=sum.golang.google.cn` for mainland China. The corresponding
+`GO_BUILD_GOPROXY` and `GO_BUILD_GOSUMDB` values are exposed in `deploy/.env`,
+so another environment can override them without editing the Dockerfile.
+
 ## 4. Build images and configure provider credentials
 
 ```bash
@@ -111,3 +116,16 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d
 ```
 
 To rotate provider keys, rerun the `provider-credentials` command from step 4.
+
+## Legacy docker-compose v1
+
+The deployment file retains Compose `3.8` compatibility for servers that still
+use the legacy standalone command. Compose v2 remains preferred. With v1, set
+the project name on the command line:
+
+```bash
+docker-compose --env-file deploy/.env -p tiehu-fitness \
+  -f deploy/docker-compose.yml build
+docker-compose --env-file deploy/.env -p tiehu-fitness \
+  -f deploy/docker-compose.yml up -d
+```

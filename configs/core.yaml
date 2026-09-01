@@ -9,8 +9,8 @@ wechat:
   app_id: ${WECHAT_APP_ID:}
   app_secret: ${WECHAT_APP_SECRET:}
 utools:
-  plugin_id: ${UTOOLS_PLUGIN_ID:}
-  plugin_secret: ${UTOOLS_PLUGIN_SECRET:}
+  plugin_id: zxm1gvtr
+  plugin_secret: mJf3AOsuCq9lXIRvEqXwtkS4SKYpK5I8
   base_info_endpoint: "https://open.u-tools.cn/baseinfo"
   request_timeout: 5s
   response_max_age: 600s

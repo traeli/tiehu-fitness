@@ -1,4 +1,4 @@
-name: tiehu-fitness
+version: "3.8"
 
 x-service-defaults: &service-defaults
   restart: unless-stopped
@@ -27,6 +27,8 @@ services:
       target: core
       args:
         VERSION: ${APP_VERSION:-dev}
+        GOPROXY: ${GO_BUILD_GOPROXY:-https://goproxy.cn,direct}
+        GOSUMDB: ${GO_BUILD_GOSUMDB:-sum.golang.google.cn}
     image: tiehu-fitness-core:${APP_VERSION:-dev}
     container_name: tiehu-core
     environment:
@@ -60,6 +62,8 @@ services:
       target: vision
       args:
         VERSION: ${APP_VERSION:-dev}
+        GOPROXY: ${GO_BUILD_GOPROXY:-https://goproxy.cn,direct}
+        GOSUMDB: ${GO_BUILD_GOSUMDB:-sum.golang.google.cn}
     image: tiehu-fitness-vision:${APP_VERSION:-dev}
     container_name: tiehu-vision
     environment:
