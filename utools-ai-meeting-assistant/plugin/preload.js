@@ -7,7 +7,8 @@ const lifecycleListeners = new Set();
 let lastEntryAction = null;
 let recordingMutationQueue = Promise.resolve();
 const nativeSystemAudio = new NativeSystemAudioProcess();
-const recordingDirectoryName = "铁虎AI会议助手";
+const recordingDirectoryName = "会议助手";
+const legacyRecordingDirectoryName = "铁虎AI会议助手";
 const recordingSubdirectoryName = "录音";
 const recordingIndexFileName = "index.json";
 const maxRecordingBytes = 256 * 1024 * 1024;
@@ -77,6 +78,63 @@ const recordingDirectory = () => {
   );
 };
 
+const legacyRecordingDirectory = () => {
+  requireUTools();
+  return path.join(
+    utools.getPath("documents"),
+    legacyRecordingDirectoryName,
+    recordingSubdirectoryName,
+  );
+};
+
+let recordingDirectoryInitialization;
+
+const ensureRecordingDirectory = async () => {
+  if (recordingDirectoryInitialization) {
+    return recordingDirectoryInitialization;
+  }
+  recordingDirectoryInitialization = (async () => {
+    const directory = recordingDirectory();
+    try {
+      const stat = await fs.stat(directory);
+      if (!stat.isDirectory()) {
+        throw new Error("Recording directory path is not a directory");
+      }
+      return directory;
+    } catch (error) {
+      if (!error || error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    const legacyDirectory = legacyRecordingDirectory();
+    try {
+      const legacyStat = await fs.stat(legacyDirectory);
+      if (!legacyStat.isDirectory()) {
+        throw new Error("Legacy recording directory path is not a directory");
+      }
+      await fs.mkdir(path.dirname(directory), { recursive: true });
+      await fs.rename(legacyDirectory, directory);
+      try {
+        await fs.rmdir(path.dirname(legacyDirectory));
+      } catch (cleanupError) {
+        if (!cleanupError || !["ENOENT", "ENOTEMPTY", "EEXIST"].includes(cleanupError.code)) {
+          console.error("cleanup legacy recording directory failed", cleanupError);
+        }
+      }
+      return directory;
+    } catch (error) {
+      if (!error || error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    await fs.mkdir(directory, { recursive: true });
+    return directory;
+  })();
+  return recordingDirectoryInitialization;
+};
+
 const recordingIndexPath = () => path.join(recordingDirectory(), recordingIndexFileName);
 
 const validateRecordingID = (value, field) => {
@@ -120,6 +178,7 @@ const validateRecordingMetadata = (value) => {
 };
 
 const readRecordingIndex = async () => {
+  await ensureRecordingDirectory();
   const indexPath = recordingIndexPath();
   try {
     const stat = await fs.stat(indexPath);
@@ -140,8 +199,7 @@ const readRecordingIndex = async () => {
 };
 
 const writeRecordingIndex = async (recordings) => {
-  const directory = recordingDirectory();
-  await fs.mkdir(directory, { recursive: true });
+  const directory = await ensureRecordingDirectory();
   const indexPath = recordingIndexPath();
   const temporaryPath = path.join(
     directory,
@@ -280,8 +338,7 @@ window.meetingDesktop = Object.freeze({
       fileName: `${input.id}.${extension}`,
     });
     return enqueueRecordingMutation(async () => {
-      const directory = recordingDirectory();
-      await fs.mkdir(directory, { recursive: true });
+      const directory = await ensureRecordingDirectory();
       const recordings = await readRecordingIndex();
       if (recordings.some((recording) => recording.id === metadata.id)) {
         throw new Error("Recording already exists");

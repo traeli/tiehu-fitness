@@ -97,7 +97,7 @@ onBeforeUnmount(() => meeting.disposeRuntime());
         <img :src="logoURL" alt="" />
       </div>
       <div>
-        <h1>AI 会议助手</h1>
+        <h1>会议助手</h1>
         <p>让每一次讨论都有清晰结果</p>
       </div>
       <span class="environment-badge">{{ environmentText }}</span>
