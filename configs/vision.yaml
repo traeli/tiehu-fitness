@@ -50,8 +50,8 @@ realtime_transcription:
     - "http://localhost:*"
     - "utools://*"
     - "null"
-    # uTools production pages may omit Origin for custom-protocol resources.
-    - "missing"
+    # uTools production packages load index.html from a local file origin.
+    - "file://"
   handshake_timeout: 10s
   idle_timeout: 30s
   write_timeout: 5s

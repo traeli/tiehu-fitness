@@ -21,10 +21,7 @@ import (
 	"github.com/tiehu-ai/tiehu-fitness/internal/conf"
 )
 
-const (
-	normalWebSocketClosure = 1000
-	missingOriginRule      = "missing"
-)
+const normalWebSocketClosure = 1000
 
 type realtimeWebSocketConfig struct {
 	handshakeTimeout time.Duration
@@ -439,9 +436,6 @@ func (h *RealtimeWebSocketHandler) writeJSON(conn *websocket.Conn, message any) 
 
 func (h *RealtimeWebSocketHandler) originAllowed(origin string) bool {
 	for _, allowed := range h.cfg.allowedOrigins {
-		if allowed == missingOriginRule && origin == "" {
-			return true
-		}
 		if origin == allowed {
 			return true
 		}
@@ -502,7 +496,7 @@ func validateRealtimeWebSocketConfig(cfg *conf.RealtimeTranscription) (realtimeW
 }
 
 func validateOriginRule(rule string) error {
-	if rule == "null" || rule == "utools://*" || rule == missingOriginRule {
+	if rule == "null" || rule == "file://" || rule == "utools://*" {
 		return nil
 	}
 	if rule == "*" || strings.TrimSpace(rule) != rule {
