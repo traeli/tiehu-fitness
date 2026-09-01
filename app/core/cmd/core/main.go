@@ -12,6 +12,7 @@ import (
 	"github.com/tiehu-ai/tiehu-fitness/app/core/internal/data"
 	"github.com/tiehu-ai/tiehu-fitness/app/core/internal/server"
 	"github.com/tiehu-ai/tiehu-fitness/app/core/internal/service"
+	"github.com/tiehu-ai/tiehu-fitness/app/core/internal/worker"
 	"github.com/tiehu-ai/tiehu-fitness/internal/platform/bootstrap"
 	"github.com/tiehu-ai/tiehu-fitness/internal/platform/database"
 	platformredis "github.com/tiehu-ai/tiehu-fitness/internal/platform/redis"
@@ -127,13 +128,17 @@ func run() error {
 	}
 	meetingService := service.NewMeetingService(meetingUsecase)
 	meetingIngestService := service.NewMeetingIngestInternalService(meetingUsecase)
+	quotaReconciler, err := worker.NewMeetingQuotaReconciler(meetingQuotaUsecase, 30*time.Second, 100, logger)
+	if err != nil {
+		return fmt.Errorf("create meeting quota reconciliation worker: %w", err)
+	}
 
 	httpServer, err := server.NewHTTPServer(bc.Server, bc.GetHttpCors(), authMiddleware, userService, contentService, meetingService)
 	if err != nil {
 		return fmt.Errorf("create core HTTP server: %w", err)
 	}
 	grpcServer := server.NewGRPCServer(bc.Server, authMiddleware, userService, contentService, meetingService, meetingIngestService)
-	app := bootstrap.NewApp("tiehu.core", Version, id, logger, grpcServer, httpServer)
+	app := bootstrap.NewApp("tiehu.core", Version, id, logger, grpcServer, httpServer, quotaReconciler)
 	if err := app.Run(); err != nil {
 		return fmt.Errorf("run core-service: %w", err)
 	}

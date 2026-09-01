@@ -76,7 +76,7 @@ func TestAutoMigrateSchemaCreatesVisionTablesAndSeeds(t *testing.T) {
 	if err := db.Where("status = ?", "active").Take(&summaryConfig).Error; err != nil {
 		t.Fatalf("load default summary provider config: %v", err)
 	}
-	if summaryConfig.Version != 1 || summaryConfig.ModelName != "deepseek-v4-flash" {
+	if summaryConfig.Version <= 0 || summaryConfig.ModelName != "deepseek-v4-flash" || summaryConfig.PromptVersion != "meeting-summary-v2" {
 		t.Fatalf("unexpected default summary provider config: %+v", summaryConfig)
 	}
 }

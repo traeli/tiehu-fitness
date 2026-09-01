@@ -71,6 +71,27 @@ func (r *TranscriptionRepo) CreateOrGet(ctx context.Context, session *biz.Transc
 	return mapped, wasCreated, err
 }
 
+func (r *TranscriptionRepo) ListStalePending(ctx context.Context, before time.Time, limit int) ([]*biz.TranscriptionSession, error) {
+	if ctx == nil || before.IsZero() || limit <= 0 || limit > 1_000 {
+		return nil, fmt.Errorf("stale pending transcription query is invalid")
+	}
+	var rows []model.TranscriptionSession
+	if err := r.db.WithContext(ctx).
+		Where("status = ? AND updated_at <= ?", biz.TranscriptionSessionStatusPending, before.UTC()).
+		Order("updated_at ASC, id ASC").Limit(limit).Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list stale pending transcription sessions: %w", err)
+	}
+	sessions := make([]*biz.TranscriptionSession, 0, len(rows))
+	for index := range rows {
+		session, err := transcriptionModelToBiz(&rows[index])
+		if err != nil {
+			return nil, fmt.Errorf("map stale pending transcription session: %w", err)
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, nil
+}
+
 func (r *TranscriptionRepo) StartAttempt(ctx context.Context, sessionID string, provider biz.ASRProviderName) (*biz.ASRAttempt, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is required")

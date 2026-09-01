@@ -196,6 +196,11 @@ func (r *MeetingQuotaRepo) finalizeWithTx(ctx context.Context, tx *gorm.DB, inpu
 	if input.TotalAcceptedSeconds > reported {
 		reported = minQuotaSeconds(input.TotalAcceptedSeconds, meeting.GrantedAudioSeconds)
 	}
+	reported, err = biz.RoundMeetingAudioSeconds(reported)
+	if err != nil {
+		return nil, err
+	}
+	reported = minQuotaSeconds(reported, meeting.GrantedAudioSeconds)
 	actual := minQuotaSeconds(reported, meeting.GrantedAudioSeconds)
 	if input.Reason == biz.MeetingUsageSettlementReasonPreparationFailed {
 		actual = 0
@@ -316,7 +321,12 @@ func reconcileExpiredMeetings(ctx context.Context, tx *gorm.DB, monthly *model.U
 	}
 	for index := range rows {
 		row := &rows[index]
-		actual := minQuotaSeconds(row.ReportedAudioSeconds, row.GrantedAudioSeconds)
+		billable, err := biz.RoundMeetingAudioSeconds(row.ReportedAudioSeconds)
+		if err != nil {
+			return err
+		}
+		billable = minQuotaSeconds(billable, row.GrantedAudioSeconds)
+		actual := minQuotaSeconds(billable, row.GrantedAudioSeconds)
 		update := tx.WithContext(ctx).Model(monthly).Where("reserved_seconds >= ?", row.GrantedAudioSeconds).
 			Updates(map[string]any{
 				"reserved_seconds": gorm.Expr("reserved_seconds - ?", row.GrantedAudioSeconds),
@@ -331,7 +341,7 @@ func reconcileExpiredMeetings(ctx context.Context, tx *gorm.DB, monthly *model.U
 		monthly.ReservedSeconds -= row.GrantedAudioSeconds
 		monthly.ConsumedSeconds += actual
 		if err := tx.WithContext(ctx).Model(row).Updates(map[string]any{
-			"actual_audio_seconds": actual, "quota_status": biz.MeetingUsageReservationStatusExpired.String(),
+			"reported_audio_seconds": billable, "actual_audio_seconds": actual, "quota_status": biz.MeetingUsageReservationStatusExpired.String(),
 			"quota_finalized_at": now, "quota_settlement_reason": biz.MeetingUsageSettlementReasonExpired.String(),
 			"updated_at": now,
 		}).Error; err != nil {

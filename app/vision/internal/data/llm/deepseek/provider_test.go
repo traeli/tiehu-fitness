@@ -28,6 +28,7 @@ func TestNewProviderValidatesCredentialsAndEndpoint(t *testing.T) {
 	}{
 		{name: "official endpoint"},
 		{name: "missing API key", mutate: func(config *Config) { config.APIKey = "" }, wantError: true},
+		{name: "unknown prompt version", mutate: func(config *Config) { config.PromptVersion = "meeting-summary-v99" }, wantError: true},
 		{name: "untrusted endpoint", mutate: func(config *Config) { config.Endpoint = "https://example.com/chat/completions" }, wantError: true},
 		{name: "loopback disabled", mutate: func(config *Config) { config.Endpoint = "http://127.0.0.1:18080/chat/completions" }, wantError: true},
 		{name: "loopback explicitly enabled", mutate: func(config *Config) {
@@ -71,12 +72,97 @@ func TestTranscriptChunksPreserveSegmentOrder(t *testing.T) {
 			{Sequence: 2, Content: "第二段", StartOffset: time.Second, EndOffset: 2 * time.Second},
 		},
 	}
-	chunks, err := provider.transcriptChunks(snapshot)
+	prepared, err := provider.prepareTranscript(snapshot)
 	if err != nil {
-		t.Fatalf("transcriptChunks() error = %v", err)
+		t.Fatalf("prepareTranscript() error = %v", err)
 	}
-	if len(chunks) != 1 || chunks[0] != "[00:00-00:01] 发言人: 第一段\n[00:01-00:02] 发言人: 第二段\n" {
-		t.Fatalf("transcriptChunks() = %#v", chunks)
+	if len(prepared.Chunks) != 1 || prepared.Chunks[0] != "[00:00-00:01] 发言人: 第一段\n[00:01-00:02] 发言人: 第二段\n" {
+		t.Fatalf("prepareTranscript() = %#v", prepared.Chunks)
+	}
+}
+
+func TestSemanticTranscriptTreatsUnknownSpeakerAsValidContent(t *testing.T) {
+	t.Parallel()
+	provider := newTestProvider(t, "meeting-summary-v2")
+	snapshot := &biz.MeetingTranscriptSnapshot{
+		MeetingID: "meeting-id", Language: biz.MeetingLanguageZhCN, TranscriptRevision: 2,
+		Segments: []biz.TranscriptSegment{
+			{Sequence: 1, Content: "今天介绍新的训练计划", EndOffset: time.Second},
+			{Sequence: 2, Content: "每周训练三次", StartOffset: time.Second, EndOffset: 2 * time.Second},
+		},
+	}
+
+	prepared, err := provider.prepareTranscript(snapshot)
+	if err != nil {
+		t.Fatalf("prepareTranscript() error = %v", err)
+	}
+	if len(prepared.Chunks) != 1 || strings.Contains(prepared.Chunks[0], "发言人:") {
+		t.Fatalf("unknown speakers should not be rendered as repeated labels: %#v", prepared.Chunks)
+	}
+	if !strings.Contains(prepared.Chunks[0], "今天介绍新的训练计划 每周训练三次") {
+		t.Fatalf("adjacent semantic segments were not merged: %#v", prepared.Chunks)
+	}
+	if prepared.Quality.SpeakerMode != transcriptSpeakerModeUnknown || prepared.Quality.RenderedSegments != 1 {
+		t.Fatalf("unexpected transcript quality: %+v", prepared.Quality)
+	}
+	system, err := systemPrompt(provider.promptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(system, "有效转写内容不足，无法生成可靠摘要") || !strings.Contains(system, "单人讲话") {
+		t.Fatalf("v2 prompt does not use semantic-content rules: %s", system)
+	}
+}
+
+func TestSemanticTranscriptPreservesDistinctSpeakerLabels(t *testing.T) {
+	t.Parallel()
+	provider := newTestProvider(t, "meeting-summary-v2")
+	prepared, err := provider.prepareTranscript(&biz.MeetingTranscriptSnapshot{
+		Segments: []biz.TranscriptSegment{
+			{Sequence: 1, SpeakerLabel: "甲", Content: "我们本周发布", EndOffset: time.Second},
+			{Sequence: 2, SpeakerLabel: "乙", Content: "我负责联调", StartOffset: time.Second, EndOffset: 2 * time.Second},
+		},
+	})
+	if err != nil {
+		t.Fatalf("prepareTranscript() error = %v", err)
+	}
+	if len(prepared.Chunks) != 1 || !strings.Contains(prepared.Chunks[0], "甲: 我们本周发布") ||
+		!strings.Contains(prepared.Chunks[0], "乙: 我负责联调") {
+		t.Fatalf("distinct speaker labels were not preserved: %#v", prepared.Chunks)
+	}
+	if prepared.Quality.SpeakerMode != transcriptSpeakerModeLabeled || prepared.Quality.DistinctSpeakers != 2 {
+		t.Fatalf("unexpected transcript quality: %+v", prepared.Quality)
+	}
+}
+
+func TestSemanticTranscriptRejectsPunctuationAndFillerOnly(t *testing.T) {
+	t.Parallel()
+	provider := newTestProvider(t, "meeting-summary-v2")
+	_, err := provider.prepareTranscript(&biz.MeetingTranscriptSnapshot{
+		Segments: []biz.TranscriptSegment{
+			{Sequence: 1, Content: "……", EndOffset: time.Second},
+			{Sequence: 2, Content: "嗯", StartOffset: time.Second, EndOffset: 2 * time.Second},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "no meaningful linguistic content") {
+		t.Fatalf("prepareTranscript() error = %v", err)
+	}
+}
+
+func TestSemanticTranscriptRemovesImmediateDuplicate(t *testing.T) {
+	t.Parallel()
+	provider := newTestProvider(t, "meeting-summary-v2")
+	prepared, err := provider.prepareTranscript(&biz.MeetingTranscriptSnapshot{
+		Segments: []biz.TranscriptSegment{
+			{Sequence: 1, Content: "确认下周一发布", EndOffset: time.Second},
+			{Sequence: 2, Content: "确认下周一发布", StartOffset: time.Second, EndOffset: 2 * time.Second},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(prepared.Chunks[0], "确认下周一发布") != 1 || prepared.Quality.ValidSegments != 1 {
+		t.Fatalf("immediate duplicate was not removed: chunks=%#v quality=%+v", prepared.Chunks, prepared.Quality)
 	}
 }
 
@@ -163,6 +249,19 @@ type exchangeRecorderFake struct {
 	response   string
 	httpStatus int32
 	failure    string
+}
+
+func newTestProvider(t *testing.T, promptVersion string) *Provider {
+	t.Helper()
+	provider, err := NewProvider(Config{
+		APIKey: "test-key", Endpoint: "https://api.deepseek.com/chat/completions",
+		Model: "deepseek-v4-flash", PromptVersion: promptVersion,
+		RequestTimeout: time.Minute, MaxInputCharsPerChunk: 1_000, MaxChunks: 8, MaxOutputTokens: 512,
+	}, &exchangeRecorderFake{}, slog.Default())
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	return provider
 }
 
 func (r *exchangeRecorderFake) RecordLLMRequest(_ context.Context, _ string, payload string, _ time.Time) error {

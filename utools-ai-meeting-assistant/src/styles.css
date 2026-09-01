@@ -127,7 +127,6 @@ button:disabled { cursor: wait; opacity: 0.48; }
 .summary-section ul { margin: 0; padding-left: 17px; color: #555765; font-size: 11px; line-height: 1.65; }
 .summary-section small { color: #999aa7; }
 .summary-risks { background: #fff5ef; }
-.summary-meta { margin: 12px 0 0; color: #999aa7; font-size: 9px; }
 .transcript-seek { width: 100%; padding: 8px; border: 0; border-radius: 9px; color: inherit; background: transparent; text-align: left; }
 .transcript-seek:hover { background: #f1eff7; }
 .transcript-seek span { min-width: 0; }

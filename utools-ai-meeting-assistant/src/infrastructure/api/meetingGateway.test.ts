@@ -99,6 +99,25 @@ describe("HttpMeetingGateway", () => {
     });
   });
 
+  it("rejects a quota snapshot whose balances do not add up", async () => {
+    const api = new StubApiClient({
+      quota: {
+        period_start: "2026-08-31T16:00:00Z",
+        period_end: "2026-09-30T16:00:00Z",
+        limit: "7200s",
+        consumed: "60s",
+        reserved: "3600s",
+        remaining: "3600s",
+        max_meeting_duration: "7200s",
+        max_concurrent_meetings: 1,
+      },
+    });
+
+    await expect(new HttpMeetingGateway(api).getMeetingQuota()).rejects.toThrow(
+      "Meeting quota balances are inconsistent",
+    );
+  });
+
   it("uses Proto JSON and maps the backend PCM contract", async () => {
     const api = new StubApiClient({
       meeting: {
@@ -270,9 +289,11 @@ describe("HttpMeetingGateway", () => {
         version: 2,
         topic: "迭代计划",
         actionItems: [{ assignee: "张三", task: "完成联调", dueText: "周五" }],
-        modelName: "deepseek-v4-flash",
       },
     });
+    expect(result.summary).not.toHaveProperty("provider");
+    expect(result.summary).not.toHaveProperty("modelName");
+    expect(result.summary).not.toHaveProperty("promptVersion");
     expect(api.requests[0]?.path).toBe("/v1/meetings/meeting%2Fid/summary");
   });
 

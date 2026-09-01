@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import type { MeetingQuota } from "@/domain/meeting";
+import { formatQuotaDuration, type MeetingQuota } from "@/domain/meeting";
 
 const props = defineProps<{
   quota?: MeetingQuota;
@@ -29,19 +29,6 @@ const resetText = computed(() => {
     day: "numeric",
   }).format(new Date(props.quota.periodEnd));
 });
-
-function formatQuota(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return "0 分钟";
-  }
-  const wholeMinutes = Math.ceil(seconds / 60);
-  const hours = Math.floor(wholeMinutes / 60);
-  const minutes = wholeMinutes % 60;
-  if (hours === 0) {
-    return `${minutes} 分钟`;
-  }
-  return minutes === 0 ? `${hours} 小时` : `${hours} 小时 ${minutes} 分钟`;
-}
 </script>
 
 <template>
@@ -49,7 +36,7 @@ function formatQuota(seconds: number): string {
     <div class="quota-heading">
       <div>
         <p class="eyebrow">本月会议额度</p>
-        <strong v-if="quota">剩余 {{ formatQuota(quota.remainingSeconds) }}</strong>
+        <strong v-if="quota">剩余 {{ formatQuotaDuration(quota.remainingSeconds) }}</strong>
         <strong v-else-if="loading">正在加载额度…</strong>
         <strong v-else>额度暂不可用</strong>
       </div>
@@ -61,15 +48,16 @@ function formatQuota(seconds: number): string {
         <span :style="{ width: `${usedPercent}%` }"></span>
       </div>
       <div class="quota-breakdown">
-        <span>总额度 {{ formatQuota(quota.totalLimitSeconds) }}</span>
-        <span>基础 {{ formatQuota(quota.baseLimitSeconds) }}</span>
-        <span v-if="quota.purchasedLimitSeconds > 0">购买 {{ formatQuota(quota.purchasedLimitSeconds) }}</span>
+        <span>总额度 {{ formatQuotaDuration(quota.totalLimitSeconds) }}</span>
+        <span>基础 {{ formatQuotaDuration(quota.baseLimitSeconds) }}</span>
+        <span v-if="quota.purchasedLimitSeconds > 0">购买 {{ formatQuotaDuration(quota.purchasedLimitSeconds) }}</span>
       </div>
       <small>
-        已使用 {{ formatQuota(quota.consumedSeconds) }}
-        <template v-if="quota.reservedSeconds > 0"> · 会议预占 {{ formatQuota(quota.reservedSeconds) }}</template>
+        已使用 {{ formatQuotaDuration(quota.consumedSeconds) }}
+        <template v-if="quota.reservedSeconds > 0"> · 会议预占 {{ formatQuotaDuration(quota.reservedSeconds) }}</template>
         · {{ resetText }}重置
       </small>
+      <p v-if="error" class="quota-error">{{ error }}，当前显示的是上次成功加载的数据。</p>
     </template>
     <p v-else-if="error" class="quota-error">{{ error }}</p>
   </section>

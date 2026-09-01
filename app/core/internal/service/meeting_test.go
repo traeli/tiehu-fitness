@@ -66,6 +66,34 @@ func TestMeetingDomainToProtoMapping(t *testing.T) {
 	}
 }
 
+func TestMeetingSummaryProtoMappingDoesNotExposeProviderMetadata(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	summary := &biz.MeetingSummary{
+		MeetingID:                "meeting-id",
+		Version:                  2,
+		SourceTranscriptRevision: 8,
+		Topic:                    "迭代计划",
+		Abstract:                 "团队确认了下一阶段安排。",
+		KeyDiscussions:           []string{"会议总结页面"},
+		Decisions:                []string{"先完成联调"},
+		Provider:                 "deepseek",
+		ModelName:                "deepseek-v4-flash",
+		PromptVersion:            "meeting-summary-v2",
+		InputTokens:              596,
+		OutputTokens:             55,
+		GeneratedAt:              &now,
+	}
+
+	got := toMeetingSummaryProto(summary)
+	if got == nil || got.GetTopic() != summary.Topic || got.GetVersion() != summary.Version {
+		t.Fatalf("toMeetingSummaryProto() = %#v", got)
+	}
+	if got.GetProvider() != "" || got.GetModelName() != "" || got.GetPromptVersion() != "" ||
+		got.GetInputTokens() != 0 || got.GetOutputTokens() != 0 {
+		t.Fatalf("public meeting summary exposes internal LLM metadata: %#v", got)
+	}
+}
+
 func TestMeetingQuotaDomainToProtoMapping(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	quota := &biz.MeetingQuotaSnapshot{

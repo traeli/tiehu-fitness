@@ -288,9 +288,10 @@ func TestRoundMeetingAudioUsage(t *testing.T) {
 		wantErr  bool
 	}{
 		{name: "zero"},
-		{name: "partial second", duration: time.Nanosecond, want: 1},
-		{name: "exact second", duration: time.Second, want: 1},
-		{name: "partial second after whole", duration: time.Second + time.Nanosecond, want: 2},
+		{name: "partial second", duration: time.Nanosecond, want: 60},
+		{name: "exact second", duration: time.Second, want: 60},
+		{name: "exact minute", duration: time.Minute, want: 60},
+		{name: "partial minute after whole", duration: time.Minute + time.Nanosecond, want: 120},
 		{name: "negative", duration: -time.Nanosecond, wantErr: true},
 	}
 	for _, tt := range tests {
@@ -300,5 +301,32 @@ func TestRoundMeetingAudioUsage(t *testing.T) {
 				t.Fatalf("RoundMeetingAudioUsage() = (%d, %v), want (%d, err=%v)", got, err, tt.want, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestMeetingQuotaUsecaseRoundsReportsAndFinalizationToMinutes(t *testing.T) {
+	reservationID, meetingID := uuid.NewString(), uuid.NewString()
+	repo := &quotaFakeRepo{reservation: &MeetingUsageReservation{ID: reservationID, MeetingID: meetingID}}
+	uc, err := NewMeetingQuotaUsecase(repo, repo, &quotaFakeRateLimiter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reported, err := uc.ReportUsage(context.Background(), reservationID, meetingID, 1, time.Now())
+	if err != nil || reported.ReportedSeconds != 60 {
+		t.Fatalf("ReportUsage() = (%#v, %v), want 60 seconds", reported, err)
+	}
+	_, err = uc.Finalize(context.Background(), MeetingUsageFinalizeCommand{
+		ReservationID:        reservationID,
+		MeetingID:            meetingID,
+		TotalAcceptedSeconds: 61,
+		Reason:               MeetingUsageSettlementReasonCompleted,
+		FinalizedAt:          time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.finalizeInput.TotalAcceptedSeconds != 120 {
+		t.Fatalf("finalized accepted seconds = %d, want 120", repo.finalizeInput.TotalAcceptedSeconds)
 	}
 }

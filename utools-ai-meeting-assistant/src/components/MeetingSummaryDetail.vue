@@ -84,11 +84,6 @@ function formatGeneratedAt(value?: string): string {
         <h5>风险与待确认</h5>
         <ul><li v-for="item in summary.risks" :key="item">{{ item }}</li></ul>
       </section>
-
-      <p v-if="summary.modelName" class="summary-meta">
-        {{ summary.provider || "LLM" }} · {{ summary.modelName }}
-        <template v-if="summary.version"> · 版本 {{ summary.version }}</template>
-      </p>
     </template>
   </div>
 </template>

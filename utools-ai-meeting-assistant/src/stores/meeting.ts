@@ -19,6 +19,7 @@ import { appConfig } from "@/config";
 import {
   canStartMeeting,
   canStopMeeting,
+  requiresMeetingCleanup,
   type ClientMeetingPhase,
   type MeetingSession,
   type MeetingQuota,
@@ -82,6 +83,10 @@ export const useMeetingStore = defineStore("meeting", () => {
   let recordingSelectionVersion = 0;
   let recordingSummaryPollTimer: number | undefined;
   let quotaRefreshVersion = 0;
+  let startOperationVersion = 0;
+  let stopIdempotencyKey: string | undefined;
+  let lifecycleCleanupPromise: Promise<void> | undefined;
+  let pageHideListenerInstalled = false;
 
   const canStart = computed(() => canStartMeeting(phase.value));
   const canStop = computed(() => canStopMeeting(phase.value));
@@ -102,6 +107,10 @@ export const useMeetingStore = defineStore("meeting", () => {
     recordingDirectory.value = getDesktopBridge().getRecordingDirectory();
     unsubscribeLifecycle?.();
     unsubscribeLifecycle = getDesktopBridge().subscribeLifecycle(handleLifecycleEvent);
+    if (!pageHideListenerInstalled) {
+      window.addEventListener("pagehide", handlePageHide);
+      pageHideListenerInstalled = true;
+    }
     void refreshRecordings();
     if (!requiresBrowserAuthentication()) {
       void refreshQuota();
@@ -111,6 +120,12 @@ export const useMeetingStore = defineStore("meeting", () => {
   function disposeRuntime(): void {
     unsubscribeLifecycle?.();
     unsubscribeLifecycle = undefined;
+    if (pageHideListenerInstalled) {
+      window.removeEventListener("pagehide", handlePageHide);
+      pageHideListenerInstalled = false;
+    }
+    transcriptionClient?.close();
+    void cleanupMeetingForLifecycle(false);
     clearRecordingSelection();
   }
 
@@ -129,10 +144,12 @@ export const useMeetingStore = defineStore("meeting", () => {
     }
     resetMeetingView();
     phase.value = "starting";
+    const operationVersion = ++startOperationVersion;
 
     let gateway: Awaited<ReturnType<typeof getMeetingGateway>> | undefined;
     try {
       gateway = await getMeetingGateway();
+      assertStartOperationActive(operationVersion);
       const created = await gateway.createMeeting({
         language: "auto",
         retainAudio: retainAudio.value,
@@ -140,6 +157,8 @@ export const useMeetingStore = defineStore("meeting", () => {
         idempotencyKey: crypto.randomUUID(),
       });
       session.value = created;
+      stopIdempotencyKey = crypto.randomUUID();
+      assertStartOperationActive(operationVersion);
       void refreshQuota();
 
       if (created.websocketUrl && created.sessionTicket) {
@@ -156,6 +175,7 @@ export const useMeetingStore = defineStore("meeting", () => {
           },
         });
         await transcriptionClient.connect();
+        assertStartOperationActive(operationVersion);
       } else {
         connectionState.value = "connected";
       }
@@ -192,6 +212,7 @@ export const useMeetingStore = defineStore("meeting", () => {
         }
         mixedAudioLevel.value = level.peak;
       });
+      assertStartOperationActive(operationVersion);
 
       phase.value = "recording";
       startElapsedTimer();
@@ -199,6 +220,7 @@ export const useMeetingStore = defineStore("meeting", () => {
         scheduleMockTranscript();
       }
     } catch (error) {
+      const interruptedByLifecycle = operationVersion !== startOperationVersion;
       try {
         await cleanupCapture(false);
       } catch (cleanupError) {
@@ -206,7 +228,7 @@ export const useMeetingStore = defineStore("meeting", () => {
       }
       if (gateway && session.value) {
         try {
-          await gateway.stopMeeting(session.value.meetingId, crypto.randomUUID());
+          await gateway.stopMeeting(session.value.meetingId, stopIdempotencyKey ?? crypto.randomUUID());
         } catch (compensationError) {
           console.error("stop meeting after audio capture startup failure", {
             meetingId: session.value.meetingId,
@@ -214,8 +236,8 @@ export const useMeetingStore = defineStore("meeting", () => {
           });
         }
       }
-      phase.value = "failed";
-      meetingError.value = toMeetingError(error, "start");
+      phase.value = interruptedByLifecycle ? "cancelled" : "failed";
+      meetingError.value = interruptedByLifecycle ? undefined : toMeetingError(error, "start");
       void refreshQuota();
     }
   }
@@ -241,7 +263,10 @@ export const useMeetingStore = defineStore("meeting", () => {
       }
       phase.value = "processing";
       const gateway = await getMeetingGateway();
-      const stopped = await gateway.stopMeeting(session.value.meetingId, crypto.randomUUID());
+      const stopped = await gateway.stopMeeting(
+        session.value.meetingId,
+        stopIdempotencyKey ?? (stopIdempotencyKey = crypto.randomUUID()),
+      );
       phase.value = stopped.status;
       void refreshQuota();
       getDesktopBridge().notify("本地录音已保存，会议纪要将在后台生成");
@@ -393,6 +418,60 @@ export const useMeetingStore = defineStore("meeting", () => {
     systemAudioLevel.value = 0;
     mixedAudioLevel.value = 0;
     systemAudioSignalSeen.value = false;
+    stopIdempotencyKey = undefined;
+  }
+
+  function assertStartOperationActive(operationVersion: number): void {
+    if (operationVersion !== startOperationVersion) {
+      throw new Error("会议启动已因插件退出而取消");
+    }
+  }
+
+  function handlePageHide(): void {
+    transcriptionClient?.close();
+    void cleanupMeetingForLifecycle(false);
+  }
+
+  function cleanupMeetingForLifecycle(graceful: boolean): Promise<void> {
+    if (lifecycleCleanupPromise) {
+      return lifecycleCleanupPromise;
+    }
+    if (!requiresMeetingCleanup(phase.value)) {
+      return Promise.resolve();
+    }
+    startOperationVersion += 1;
+    clearTimers();
+    const activeSession = session.value;
+    const activeStopKey = stopIdempotencyKey ?? crypto.randomUUID();
+    stopIdempotencyKey = activeStopKey;
+    phase.value = "stopping";
+    lifecycleCleanupPromise = (async () => {
+      try {
+        await cleanupCapture(graceful);
+      } catch (error) {
+        console.error("cleanup capture after plugin exit failed", error);
+      }
+      if (!activeSession) {
+        phase.value = "cancelled";
+        return;
+      }
+      try {
+        const gateway = await getMeetingGateway();
+        const stopped = await gateway.stopMeeting(activeSession.meetingId, activeStopKey);
+        phase.value = stopped.status;
+      } catch (error) {
+        phase.value = "cancelled";
+        console.error("stop meeting after plugin exit failed", {
+          meetingId: activeSession.meetingId,
+          error,
+        });
+      } finally {
+        void refreshQuota();
+      }
+    })().finally(() => {
+      lifecycleCleanupPromise = undefined;
+    });
+    return lifecycleCleanupPromise;
   }
 
   async function cleanupCapture(graceful: boolean): Promise<void> {
@@ -680,9 +759,7 @@ export const useMeetingStore = defineStore("meeting", () => {
         return;
       case "out":
         pluginVisibility.value = "hidden";
-        if (event.isKill && phase.value === "recording") {
-          void performStopMeeting();
-        }
+        void cleanupMeetingForLifecycle(true);
         return;
     }
   }

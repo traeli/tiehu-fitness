@@ -108,7 +108,7 @@ func TestCompactMeetingQuotaLedgerReservesAllRemainingAndSettlesInMeeting(t *tes
 	userID := createQuotaTestUser(t, db)
 	repo := NewMeetingQuotaRepo(db)
 	meetingRepo := NewMeetingRepo(db)
-	policy := quotaTestPolicy(t, 10, 6, 1)
+	policy := quotaTestPolicy(t, 120, 120, 1)
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	meetingID, reservationID := uuid.NewString(), uuid.NewString()
 	created, err := meetingRepo.CreateWithQuota(context.Background(), biz.MeetingCreatePersistenceInput{
@@ -122,8 +122,8 @@ func TestCompactMeetingQuotaLedgerReservesAllRemainingAndSettlesInMeeting(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.Reservation.GrantedSeconds != 10 {
-		t.Fatalf("granted seconds = %d, want all 10 remaining seconds", created.Reservation.GrantedSeconds)
+	if created.Reservation.GrantedSeconds != 120 {
+		t.Fatalf("granted seconds = %d, want all 120 remaining seconds", created.Reservation.GrantedSeconds)
 	}
 	if _, err := repo.ReportUsage(context.Background(), reservationID, meetingID, 4, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
@@ -134,21 +134,21 @@ func TestCompactMeetingQuotaLedgerReservesAllRemainingAndSettlesInMeeting(t *tes
 			ProviderUsageSeconds: 5, Reason: biz.MeetingUsageSettlementReasonCompleted, FinalizedAt: now.Add(2 * time.Minute),
 		}, Kind: biz.MeetingUsageKindASRAudio,
 	})
-	if err != nil || record.ActualSeconds != 4 || record.ProviderUsageSeconds != 5 {
+	if err != nil || record.ActualSeconds != 60 || record.ProviderUsageSeconds != 5 {
 		t.Fatalf("Finalize() = (%#v, %v)", record, err)
 	}
 	var meeting model.Meeting
 	if err := db.Where("id = ?", meetingID).Take(&meeting).Error; err != nil {
 		t.Fatal(err)
 	}
-	if meeting.QuotaStatus != biz.MeetingUsageReservationStatusSettled.String() || meeting.ActualAudioSeconds != 4 || meeting.QuotaFinalizedAt == nil {
+	if meeting.QuotaStatus != biz.MeetingUsageReservationStatusSettled.String() || meeting.ActualAudioSeconds != 60 || meeting.QuotaFinalizedAt == nil {
 		t.Fatalf("compact meeting quota fields = %#v", meeting)
 	}
 	var monthly model.UserMeetingMonthlyQuota
 	if err := db.Where("user_id = ? AND period_start = ?", userID, policy.PeriodAt(now).Start).Take(&monthly).Error; err != nil {
 		t.Fatal(err)
 	}
-	if monthly.ReservedSeconds != 0 || monthly.ConsumedSeconds != 4 {
+	if monthly.ReservedSeconds != 0 || monthly.ConsumedSeconds != 60 {
 		t.Fatalf("monthly quota = %#v", monthly)
 	}
 }

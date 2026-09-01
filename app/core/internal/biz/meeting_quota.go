@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -336,6 +337,10 @@ func (uc *MeetingQuotaUsecase) ReportUsage(ctx context.Context, reservationID, m
 	if err := validateReservationCommand(reservationID, meetingID, totalSeconds); err != nil {
 		return nil, err
 	}
+	totalSeconds, err := RoundMeetingAudioSeconds(totalSeconds)
+	if err != nil {
+		return nil, err
+	}
 	reservation, err := uc.repo.ReportUsage(ctx, reservationID, meetingID, totalSeconds, normalizedQuotaTime(observedAt))
 	if stderrors.Is(err, ErrMeetingQuotaReservationNotFound) {
 		return nil, kratoserrors.NotFound("MEETING_QUOTA_RESERVATION_NOT_FOUND", "meeting quota reservation not found")
@@ -345,6 +350,11 @@ func (uc *MeetingQuotaUsecase) ReportUsage(ctx context.Context, reservationID, m
 
 func (uc *MeetingQuotaUsecase) Finalize(ctx context.Context, command MeetingUsageFinalizeCommand) (*MeetingUsageRecord, error) {
 	if err := validateReservationCommand(command.ReservationID, command.MeetingID, command.TotalAcceptedSeconds); err != nil {
+		return nil, err
+	}
+	var err error
+	command.TotalAcceptedSeconds, err = RoundMeetingAudioSeconds(command.TotalAcceptedSeconds)
+	if err != nil {
 		return nil, err
 	}
 	if command.ProviderUsageSeconds < 0 {
@@ -425,16 +435,37 @@ func (p MeetingQuotaPolicy) PeriodAt(at time.Time) MeetingBillingPeriod {
 }
 
 // RoundMeetingAudioUsage converts accepted audio duration to billable whole
-// seconds. A non-zero partial second is charged as one second.
+// minutes. Zero accepted audio is not charged; any non-zero duration is
+// charged for at least one minute.
 func RoundMeetingAudioUsage(duration time.Duration) (int64, error) {
 	if duration < 0 {
 		return 0, kratoserrors.BadRequest("AUDIO_USAGE_INVALID", "audio usage must not be negative")
 	}
-	seconds := int64(duration / time.Second)
-	if duration%time.Second != 0 {
-		seconds++
+	if duration == 0 {
+		return 0, nil
 	}
-	return seconds, nil
+	minutes := int64(duration / time.Minute)
+	if duration%time.Minute != 0 {
+		minutes++
+	}
+	return minutes * int64(time.Minute/time.Second), nil
+}
+
+// RoundMeetingAudioSeconds applies the same billing rule to provider-reported
+// whole seconds. Keeping this conversion in biz prevents transport, workers,
+// and repositories from inventing different rounding behavior.
+func RoundMeetingAudioSeconds(seconds int64) (int64, error) {
+	if seconds < 0 {
+		return 0, kratoserrors.BadRequest("AUDIO_USAGE_INVALID", "audio usage must not be negative")
+	}
+	if seconds == 0 {
+		return 0, nil
+	}
+	const secondsPerMinute = int64(time.Minute / time.Second)
+	if seconds > math.MaxInt64-secondsPerMinute+1 {
+		return 0, kratoserrors.BadRequest("AUDIO_USAGE_INVALID", "audio usage is out of range")
+	}
+	return ((seconds + secondsPerMinute - 1) / secondsPerMinute) * secondsPerMinute, nil
 }
 
 func validateMeetingQuotaPolicy(policy MeetingQuotaPolicy) error {

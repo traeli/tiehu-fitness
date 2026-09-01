@@ -298,8 +298,8 @@ function parseMeetingQuotaResponse(value: unknown): MeetingQuota {
     readField(quota, "remaining", "remaining"),
     "quota.remaining",
   );
-  if (remainingSeconds > totalLimitSeconds) {
-    throw new Error("Meeting quota remaining duration exceeds its limit");
+  if (consumedSeconds + reservedSeconds + remainingSeconds !== totalLimitSeconds) {
+    throw new Error("Meeting quota balances are inconsistent");
   }
   const periodStart = parseProtoTimestamp(
     readField(quota, "periodStart", "period_start"),
@@ -542,12 +542,6 @@ function parseSummary(value: unknown): MeetingSummary {
       };
     }),
     risks: requireStringArray(value.risks ?? [], "summary.risks"),
-    provider: optionalString(value.provider, "summary.provider"),
-    modelName: optionalString(readField(value, "modelName", "model_name"), "summary.modelName"),
-    promptVersion: optionalString(
-      readField(value, "promptVersion", "prompt_version"),
-      "summary.promptVersion",
-    ),
     generatedAt: optionalProtoTimestamp(
       readField(value, "generatedAt", "generated_at"),
       "summary.generatedAt",

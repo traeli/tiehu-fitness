@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/tiehu-ai/tiehu-fitness/app/vision/internal/biz"
 	"github.com/tiehu-ai/tiehu-fitness/app/vision/internal/data/model"
 	"gorm.io/gorm"
@@ -96,13 +97,57 @@ func seedVisionBootstrapData(tx *gorm.DB) error {
 		config := model.MeetingSummaryProviderConfig{
 			ID: "20000000-0000-4000-8000-000000000001", Version: 1,
 			Status: string(biz.AIProviderConfigStatusActive), Provider: string(biz.MeetingSummaryProviderNameDeepSeek), ModelName: "deepseek-v4-flash",
-			PromptVersion: "meeting-summary-v1", MaxInputCharsPerChunk: 60_000,
+			PromptVersion: "meeting-summary-v2", MaxInputCharsPerChunk: 60_000,
 			MaxChunks: 64, MaxOutputTokens: 8_192,
 			ActivatedAt: &now, CreatedAt: now, UpdatedAt: now,
 		}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&config).Error; err != nil {
 			return err
 		}
+	}
+	return activateMeetingSummaryPromptV2(tx, now)
+}
+
+// activateMeetingSummaryPromptV2 clones the immutable active v1 row instead
+// of mutating model settings referenced by historical summary jobs. The schema
+// advisory lock held by AutoMigrateSchema serializes this one-time transition.
+func activateMeetingSummaryPromptV2(tx *gorm.DB, now time.Time) error {
+	var active model.MeetingSummaryProviderConfig
+	if err := tx.Where("status = ?", string(biz.AIProviderConfigStatusActive)).Take(&active).Error; err != nil {
+		return fmt.Errorf("load active meeting summary provider config: %w", err)
+	}
+	if active.PromptVersion == "meeting-summary-v2" {
+		return nil
+	}
+	if active.PromptVersion != "meeting-summary-v1" {
+		return nil
+	}
+	var maximumVersion int64
+	if err := tx.Model(&model.MeetingSummaryProviderConfig{}).
+		Select("COALESCE(MAX(version), 0)").Scan(&maximumVersion).Error; err != nil {
+		return fmt.Errorf("load maximum meeting summary provider version: %w", err)
+	}
+	result := tx.Model(&model.MeetingSummaryProviderConfig{}).
+		Where("id = ? AND status = ?", active.ID, string(biz.AIProviderConfigStatusActive)).
+		Updates(map[string]any{
+			"status":     string(biz.AIProviderConfigStatusRetired),
+			"updated_at": now,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("retire meeting summary prompt v1 config: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("retire meeting summary prompt v1 config: active row changed concurrently")
+	}
+	next := model.MeetingSummaryProviderConfig{
+		ID: uuid.NewString(), Version: maximumVersion + 1,
+		Status: string(biz.AIProviderConfigStatusActive), Provider: active.Provider,
+		ModelName: active.ModelName, PromptVersion: "meeting-summary-v2",
+		MaxInputCharsPerChunk: active.MaxInputCharsPerChunk, MaxChunks: active.MaxChunks,
+		MaxOutputTokens: active.MaxOutputTokens, ActivatedAt: &now, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := tx.Create(&next).Error; err != nil {
+		return fmt.Errorf("activate meeting summary prompt v2 config: %w", err)
 	}
 	return nil
 }

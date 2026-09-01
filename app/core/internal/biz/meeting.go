@@ -614,6 +614,11 @@ func (uc *MeetingUsecase) finalizeTranscription(ctx context.Context, command Fin
 	if err := validateTranscriptionCommand(command.MeetingID, command.SessionID, command.ReservationID, command.TotalAcceptedSeconds, command.ProviderUsageSeconds); err != nil {
 		return nil, err
 	}
+	billableSeconds, err := RoundMeetingAudioSeconds(command.TotalAcceptedSeconds)
+	if err != nil {
+		return nil, err
+	}
+	command.TotalAcceptedSeconds = billableSeconds
 	if command.FinalizedAt.IsZero() {
 		command.FinalizedAt = time.Now().UTC()
 	} else {

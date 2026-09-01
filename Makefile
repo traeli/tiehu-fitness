@@ -108,9 +108,11 @@ migrate-vision-up:
 	@psql "$(VISION_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/vision/migrations/000007_add_encrypted_provider_credentials.up.sql
 	@psql "$(VISION_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/vision/migrations/000008_add_llm_exchange_payloads.up.sql
 	@psql "$(VISION_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/vision/migrations/000009_store_provider_credentials_plaintext.up.sql
+	@psql "$(VISION_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/vision/migrations/000010_activate_meeting_summary_prompt_v2.up.sql
 
 migrate-vision-down:
 	@test -n "$(VISION_DATABASE_DSN)" || (echo "VISION_DATABASE_DSN is required" && exit 1)
+	@psql "$(VISION_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/vision/migrations/000010_activate_meeting_summary_prompt_v2.down.sql
 	@psql "$(VISION_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/vision/migrations/000009_store_provider_credentials_plaintext.down.sql
 	@psql "$(VISION_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/vision/migrations/000008_add_llm_exchange_payloads.down.sql
 	@psql "$(VISION_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/vision/migrations/000007_add_encrypted_provider_credentials.down.sql

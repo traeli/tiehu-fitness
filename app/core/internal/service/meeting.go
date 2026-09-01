@@ -295,8 +295,6 @@ func toMeetingSummaryProto(summary *biz.MeetingSummary) *meetingv1.MeetingSummar
 		Topic:                    summary.Topic, Abstract: summary.Abstract,
 		KeyDiscussions: summary.KeyDiscussions, Decisions: summary.Decisions,
 		ActionItems: actionItems, Risks: summary.Risks,
-		Provider: summary.Provider, ModelName: summary.ModelName, PromptVersion: summary.PromptVersion,
-		InputTokens: summary.InputTokens, OutputTokens: summary.OutputTokens,
 	}
 	if summary.GeneratedAt != nil {
 		reply.GeneratedAt = timestamppb.New(*summary.GeneratedAt)

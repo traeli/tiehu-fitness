@@ -42,6 +42,9 @@ if (typeof utools !== "undefined") {
     emitLifecycle({ type: "enter", at: Date.now(), action: lastEntryAction });
   });
   utools.onPluginOut((isKill) => {
+    void nativeSystemAudio.stop().catch((error) => {
+      console.error("stop native system audio after plugin exit failed", error);
+    });
     emitLifecycle({ type: "out", at: Date.now(), isKill: Boolean(isKill) });
   });
   utools.onPluginDetach(() => {

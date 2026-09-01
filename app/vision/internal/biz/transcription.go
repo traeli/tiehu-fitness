@@ -421,6 +421,13 @@ type TranscriptionSessionRepo interface {
 	Complete(context.Context, string, []TranscriptSegment) (*TranscriptionSession, error)
 }
 
+// StalePendingTranscriptionRepo is the cleanup capability implemented by the
+// PostgreSQL adapter. It is separate from the command repository so in-memory
+// test doubles and alternate adapters do not need an unused listing method.
+type StalePendingTranscriptionRepo interface {
+	ListStalePending(context.Context, time.Time, int) ([]*TranscriptionSession, error)
+}
+
 type TranscriptionTicketRepo interface {
 	Issue(context.Context, TicketClaims) (*TranscriptionTicket, error)
 	Consume(context.Context, string) (*TicketClaims, error)
@@ -899,6 +906,43 @@ func (uc *TranscriptionUsecase) Expire(ctx context.Context, sessionID string) (*
 	uc.removeActive(sessionID)
 	_ = uc.tickets.RevokeSession(ctx, sessionID)
 	return expired, nil
+}
+
+// ExpireStalePending expires sessions whose one-time ticket has already had
+// enough time to be consumed. The conditional transition prevents a reaper
+// racing with a WebSocket start from terminating a streaming session.
+func (uc *TranscriptionUsecase) ExpireStalePending(ctx context.Context, before time.Time, limit int) (int, error) {
+	if ctx == nil {
+		return 0, kratoserrors.BadRequest("CONTEXT_REQUIRED", "context is required")
+	}
+	if before.IsZero() || limit <= 0 || limit > 1_000 {
+		return 0, kratoserrors.BadRequest("TRANSCRIPTION_REAP_INPUT_INVALID", "transcription cleanup input is invalid")
+	}
+	repo, ok := uc.repo.(StalePendingTranscriptionRepo)
+	if !ok {
+		return 0, kratoserrors.InternalServer("TRANSCRIPTION_REAP_UNAVAILABLE", "transcription cleanup repository is unavailable")
+	}
+	sessions, err := repo.ListStalePending(ctx, before.UTC(), limit)
+	if err != nil {
+		return 0, mapTranscriptionRepoError(err)
+	}
+	expiredCount := 0
+	for _, session := range sessions {
+		if session == nil {
+			return expiredCount, kratoserrors.InternalServer("TRANSCRIPTION_SESSION_INVALID", "transcription cleanup returned invalid session data")
+		}
+		_, err := uc.repo.Transition(ctx, session.ID, []TranscriptionSessionStatus{TranscriptionSessionStatusPending}, TranscriptionSessionStatusExpired, "")
+		if stderrors.Is(err, ErrTranscriptionStateConflict) {
+			continue
+		}
+		if err != nil {
+			return expiredCount, mapTranscriptionRepoError(err)
+		}
+		// These sessions are older than their ticket TTL. Redis expiry is the
+		// authoritative ticket cleanup, so no second mutable operation is needed.
+		expiredCount++
+	}
+	return expiredCount, nil
 }
 
 func (uc *TranscriptionUsecase) getActive(sessionID string) *activeASRSession {

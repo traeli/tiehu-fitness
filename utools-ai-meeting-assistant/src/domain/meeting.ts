@@ -36,19 +36,16 @@ export interface ActionItem {
 }
 
 export interface MeetingSummary {
-	meetingId?: string;
-	version?: number;
-	sourceTranscriptRevision?: number;
+  meetingId?: string;
+  version?: number;
+  sourceTranscriptRevision?: number;
   topic: string;
   abstract: string;
   keyDiscussions: string[];
   decisions: string[];
   actionItems: ActionItem[];
   risks: string[];
-	provider?: string;
-	modelName?: string;
-	promptVersion?: string;
-	generatedAt?: string;
+  generatedAt?: string;
 }
 
 export interface MeetingSummaryResult {
@@ -111,4 +108,28 @@ export function canStartMeeting(phase: ClientMeetingPhase): boolean {
 
 export function canStopMeeting(phase: ClientMeetingPhase): boolean {
   return phase === "recording";
+}
+
+export function requiresMeetingCleanup(phase: ClientMeetingPhase): boolean {
+  return phase === "starting" || phase === "recording" || phase === "stopping";
+}
+
+export function formatQuotaDuration(seconds: number): string {
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) {
+    return "0 分钟";
+  }
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  const remainingSeconds = seconds % 60;
+  const parts: string[] = [];
+  if (hours > 0) {
+    parts.push(`${hours} 小时`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes} 分钟`);
+  }
+  if (remainingSeconds > 0) {
+    parts.push(`${remainingSeconds} 秒`);
+  }
+  return parts.join(" ");
 }

@@ -59,7 +59,7 @@ func (s *MeetingIngestInternalService) ReportTranscriptionUsage(ctx context.Cont
 	if req == nil {
 		return nil, kratoserrors.BadRequest("REQUEST_REQUIRED", "request is required")
 	}
-	total, err := durationSecondsCeil(req.GetTotalAcceptedAudioDuration(), "total accepted audio duration")
+	total, err := billableAudioSeconds(req.GetTotalAcceptedAudioDuration(), "total accepted audio duration")
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func meetingSummaryFailureReasonFromProto(reason meetingv1.MeetingSummaryFailure
 }
 
 func finalizeCommand(meetingID, sessionID, reservationID string, accepted, provider *durationpb.Duration, at *timestamppb.Timestamp) (biz.FinalizeMeetingTranscriptionCommand, error) {
-	totalSeconds, err := durationSecondsCeil(accepted, "total accepted audio duration")
+	totalSeconds, err := billableAudioSeconds(accepted, "total accepted audio duration")
 	if err != nil {
 		return biz.FinalizeMeetingTranscriptionCommand{}, err
 	}
@@ -263,6 +263,13 @@ func durationSecondsCeil(value *durationpb.Duration, field string) (int64, error
 		return 0, kratoserrors.BadRequest("TRANSCRIPTION_USAGE_INVALID", field+" is out of range")
 	}
 	return int64((duration + time.Second - 1) / time.Second), nil
+}
+
+func billableAudioSeconds(value *durationpb.Duration, field string) (int64, error) {
+	if value == nil || value.CheckValid() != nil || value.AsDuration() < 0 {
+		return 0, kratoserrors.BadRequest("TRANSCRIPTION_USAGE_INVALID", field+" is invalid")
+	}
+	return biz.RoundMeetingAudioUsage(value.AsDuration())
 }
 
 func failureSettlementReason(reason meetingv1.TranscriptionFailureReason) (biz.MeetingUsageSettlementReason, error) {

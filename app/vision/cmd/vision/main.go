@@ -236,7 +236,20 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create transcription outbox worker: %w", err)
 	}
-	app := bootstrap.NewApp("tiehu.vision", Version, id, logger, gs, hs, realtimeServer, workerPool)
+	ticketTTL := realtime.GetTicketTtl().AsDuration()
+	reaperPollInterval := ticketTTL / 2
+	if reaperPollInterval < time.Second {
+		reaperPollInterval = time.Second
+	}
+	if reaperPollInterval > 30*time.Second {
+		reaperPollInterval = 30 * time.Second
+	}
+	stalePendingAfter := ticketTTL + realtime.GetHandshakeTimeout().AsDuration()
+	transcriptionReaper, err := worker.NewTranscriptionReaper(transcriptionUC, reaperPollInterval, stalePendingAfter, 100, logger)
+	if err != nil {
+		return fmt.Errorf("create transcription session reaper: %w", err)
+	}
+	app := bootstrap.NewApp("tiehu.vision", Version, id, logger, gs, hs, realtimeServer, workerPool, transcriptionReaper)
 	if err := app.Run(); err != nil {
 		return fmt.Errorf("run vision-service: %w", err)
 	}

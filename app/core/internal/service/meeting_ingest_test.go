@@ -33,6 +33,29 @@ func TestDurationSecondsCeil(t *testing.T) {
 	}
 }
 
+func TestBillableAudioSecondsRoundsNonZeroAudioToMinutes(t *testing.T) {
+	tests := []struct {
+		name       string
+		value      *durationpb.Duration
+		want       int64
+		wantReason string
+	}{
+		{name: "zero", value: durationpb.New(0), want: 0},
+		{name: "under one minute", value: durationpb.New(10 * time.Second), want: 60},
+		{name: "exact minute", value: durationpb.New(time.Minute), want: 60},
+		{name: "over one minute", value: durationpb.New(time.Minute + time.Nanosecond), want: 120},
+		{name: "missing", wantReason: "TRANSCRIPTION_USAGE_INVALID"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := billableAudioSeconds(test.value, "test duration")
+			if got != test.want || kratoserrors.Reason(err) != test.wantReason {
+				t.Fatalf("billableAudioSeconds() = (%d, %v), want (%d, %q)", got, err, test.want, test.wantReason)
+			}
+		})
+	}
+}
+
 func TestFailureSettlementReasonMappingIsExplicit(t *testing.T) {
 	tests := []struct {
 		input      meetingv1.TranscriptionFailureReason
