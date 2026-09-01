@@ -122,15 +122,30 @@ func (g *VisionTranscriptionGateway) PrepareTranscription(ctx context.Context, i
 }
 
 func (g *VisionTranscriptionGateway) CancelTranscription(ctx context.Context, input biz.CancelMeetingTranscriptionInput) error {
-	_, err := g.client.CancelTranscription(ctx, &visionv1.CancelTranscriptionRequest{
+	reason, err := meetingTranscriptionCancelReasonToProto(input.Reason)
+	if err != nil {
+		return err
+	}
+	_, err = g.client.CancelTranscription(ctx, &visionv1.CancelTranscriptionRequest{
 		SessionId: input.SessionID, MeetingId: input.MeetingID,
-		Reason:         visionv1.TranscriptionCancelReason_TRANSCRIPTION_CANCEL_REASON_PREPARE_COMPENSATION,
+		Reason:         reason,
 		IdempotencyKey: input.IdempotencyKey,
 	})
 	if err != nil {
 		return mapVisionGatewayError(err)
 	}
 	return nil
+}
+
+func meetingTranscriptionCancelReasonToProto(reason biz.MeetingTranscriptionCancelReason) (visionv1.TranscriptionCancelReason, error) {
+	switch reason {
+	case biz.MeetingTranscriptionCancelReasonUserCancelled:
+		return visionv1.TranscriptionCancelReason_TRANSCRIPTION_CANCEL_REASON_USER_CANCELLED, nil
+	case biz.MeetingTranscriptionCancelReasonPrepareCompensation:
+		return visionv1.TranscriptionCancelReason_TRANSCRIPTION_CANCEL_REASON_PREPARE_COMPENSATION, nil
+	default:
+		return visionv1.TranscriptionCancelReason_TRANSCRIPTION_CANCEL_REASON_UNSPECIFIED, fmt.Errorf("meeting transcription cancel reason is invalid")
+	}
 }
 
 func (g *VisionTranscriptionGateway) PrepareMeetingSummary(ctx context.Context, input biz.PrepareMeetingSummaryInput) error {

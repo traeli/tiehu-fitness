@@ -117,6 +117,7 @@ type meetingFakeVision struct {
 	prepareErr   error
 	prepareCalls int
 	cancelCalls  int
+	lastCancel   CancelMeetingTranscriptionInput
 }
 
 func (v *meetingFakeVision) PrepareTranscription(_ context.Context, input PrepareMeetingTranscriptionInput) (*MeetingTranscriptionSession, error) {
@@ -138,8 +139,9 @@ func (v *meetingFakeVision) PrepareTranscription(_ context.Context, input Prepar
 	return v.session, nil
 }
 
-func (v *meetingFakeVision) CancelTranscription(context.Context, CancelMeetingTranscriptionInput) error {
+func (v *meetingFakeVision) CancelTranscription(_ context.Context, input CancelMeetingTranscriptionInput) error {
 	v.cancelCalls++
+	v.lastCancel = input
 	return nil
 }
 
@@ -282,6 +284,9 @@ func TestMeetingCreateAndStopAreIdempotent(t *testing.T) {
 	}
 	if stopped.Status != MeetingStatusProcessing || repeated.Status != MeetingStatusProcessing || repeated.StopIdempotencyKey != stopKey {
 		t.Fatalf("idempotent stop = first %#v, second %#v", stopped, repeated)
+	}
+	if vision.cancelCalls != 2 || vision.lastCancel.Reason != MeetingTranscriptionCancelReasonUserCancelled {
+		t.Fatalf("stop cancellation = calls %d, input %#v", vision.cancelCalls, vision.lastCancel)
 	}
 }
 

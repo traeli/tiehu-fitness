@@ -118,6 +118,9 @@ func (s *Server) runBatch(ctx context.Context) (delivered int, err error) {
 	}()
 	now := time.Now().UTC()
 	delivered, transcriptionErr := s.uc.ProcessBatch(ctx, now)
+	if delivered > 0 {
+		s.logger.Info("vision transcription outbox batch delivered", "deliveries", delivered)
+	}
 	if s.summaryUC == nil {
 		return delivered, transcriptionErr
 	}

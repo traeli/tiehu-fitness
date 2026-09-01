@@ -11,6 +11,7 @@ export type MeetingErrorCode =
   | "SYSTEM_AUDIO_UNAVAILABLE"
   | "UTOOLS_AUTH_NOT_CONFIGURED"
   | "MEETING_QUOTA_EXCEEDED"
+  | "MEETING_CONCURRENT_LIMIT_REACHED"
   | "TRANSCRIPTION_SESSION_EXPIRED"
   | "TRANSCRIPTION_SESSION_READY_TIMEOUT"
   | "NETWORK_UNAVAILABLE"
@@ -120,6 +121,14 @@ function mapRealtimeError(
         message: error.message,
         retryable: false,
       };
+    case "MEETING_CONCURRENT_LIMIT_REACHED":
+      return {
+        code: "MEETING_CONCURRENT_LIMIT_REACHED",
+        title: "已有会议尚未结束",
+        message: "上一场会议正在结束或释放额度，请稍后重试。",
+        retryable: true,
+        failedAction,
+      };
     case "TRANSCRIPTION_SESSION_EXPIRED":
     case "TRANSCRIPTION_TICKET_INVALID":
       return {
@@ -154,6 +163,14 @@ function mapApiError(error: ApiError, failedAction?: FailedMeetingAction): Meeti
         title: "本月会议分钟数已用完",
         message: "当前账号没有可用会议时长，请稍后查看额度或升级方案。",
         retryable: false,
+      };
+    case "MEETING_CONCURRENT_LIMIT_REACHED":
+      return {
+        code: "MEETING_CONCURRENT_LIMIT_REACHED",
+        title: "已有会议尚未结束",
+        message: "上一场会议正在结束或释放额度，请稍后重试。",
+        retryable: true,
+        failedAction,
       };
     case "TRANSCRIPTION_SESSION_EXPIRED":
       return {

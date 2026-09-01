@@ -80,9 +80,11 @@ migrate-core-up:
 	@psql "$(CORE_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/core/migrations/000009_add_meeting_quota_policy.up.sql
 	@psql "$(CORE_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/core/migrations/000010_compact_meeting_summaries.up.sql
 	@psql "$(CORE_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/core/migrations/000011_add_monthly_quota_snapshot_and_orders.up.sql
+	@psql "$(CORE_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/core/migrations/000012_compact_meeting_storage.up.sql
 
 migrate-core-down:
 	@test -n "$(CORE_DATABASE_DSN)" || (echo "CORE_DATABASE_DSN is required" && exit 1)
+	@psql "$(CORE_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/core/migrations/000012_compact_meeting_storage.down.sql
 	@psql "$(CORE_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/core/migrations/000011_add_monthly_quota_snapshot_and_orders.down.sql
 	@psql "$(CORE_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/core/migrations/000010_compact_meeting_summaries.down.sql
 	@psql "$(CORE_DATABASE_DSN)" -v ON_ERROR_STOP=1 -f ./app/core/migrations/000009_add_meeting_quota_policy.down.sql

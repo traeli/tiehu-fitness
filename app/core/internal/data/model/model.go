@@ -196,19 +196,7 @@ type MeetingQuotaPolicy struct {
 
 func (MeetingQuotaPolicy) TableName() string { return "meeting_quota_policies" }
 
-type UserMeetingQuotaOverride struct {
-	UserID                 string    `gorm:"column:user_id;type:uuid;primaryKey"`
-	Status                 string    `gorm:"size:16;not null;default:active"`
-	MonthlyAudioSeconds    *int64    `gorm:"column:monthly_audio_seconds"`
-	MaxMeetingAudioSeconds *int64    `gorm:"column:max_meeting_audio_seconds"`
-	MaxConcurrentMeetings  *int32    `gorm:"column:max_concurrent_meetings"`
-	CreatedAt              time.Time `gorm:"not null;autoCreateTime"`
-	UpdatedAt              time.Time `gorm:"not null;autoUpdateTime"`
-}
-
-func (UserMeetingQuotaOverride) TableName() string { return "user_meeting_quota_overrides" }
-
-type MeetingUsagePeriod struct {
+type UserMeetingMonthlyQuota struct {
 	ID                    string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	UserID                string    `gorm:"column:user_id;type:uuid;not null;uniqueIndex:uk_usage_period_user_start,priority:1"`
 	PeriodStart           time.Time `gorm:"column:period_start;not null;uniqueIndex:uk_usage_period_user_start,priority:2"`
@@ -221,14 +209,14 @@ type MeetingUsagePeriod struct {
 	UpdatedAt             time.Time `gorm:"not null;autoUpdateTime"`
 }
 
-func (MeetingUsagePeriod) TableName() string { return "meeting_usage_periods" }
+func (UserMeetingMonthlyQuota) TableName() string { return "user_meeting_monthly_quotas" }
 
 // Order stores the payment record that grants quota to one monthly period.
 // Payment callbacks will use ExternalOrderID as their idempotency boundary.
 type Order struct {
 	ID               string     `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	UserID           string     `gorm:"column:user_id;type:uuid;not null;index"`
-	UsagePeriodID    string     `gorm:"column:usage_period_id;type:uuid;not null;index"`
+	MonthlyQuotaID   string     `gorm:"column:monthly_quota_id;type:uuid;not null;index"`
 	Type             string     `gorm:"column:type;size:32;not null;index"`
 	Status           string     `gorm:"column:status;size:16;not null;default:pending;index"`
 	ExternalOrderID  *string    `gorm:"column:external_order_id;size:128;uniqueIndex"`
@@ -239,41 +227,6 @@ type Order struct {
 }
 
 func (Order) TableName() string { return "orders" }
-
-type MeetingUsageReservation struct {
-	ID              string     `gorm:"column:reservation_id;type:uuid;primaryKey;default:gen_random_uuid()"`
-	UserID          string     `gorm:"column:user_id;type:uuid;not null;index"`
-	MeetingID       string     `gorm:"column:meeting_id;type:uuid;not null;unique"`
-	PeriodStart     time.Time  `gorm:"column:period_start;not null;index"`
-	PeriodEnd       time.Time  `gorm:"column:period_end;not null"`
-	GrantedSeconds  int64      `gorm:"column:granted_seconds;not null"`
-	ReportedSeconds int64      `gorm:"column:reported_seconds;not null;default:0"`
-	Status          string     `gorm:"size:16;not null;default:active;index"`
-	ExpiresAt       time.Time  `gorm:"column:expires_at;not null;index"`
-	FinalizedAt     *time.Time `gorm:"column:finalized_at"`
-	CreatedAt       time.Time  `gorm:"not null;autoCreateTime"`
-	UpdatedAt       time.Time  `gorm:"not null;autoUpdateTime"`
-}
-
-func (MeetingUsageReservation) TableName() string { return "meeting_usage_reservations" }
-
-type MeetingUsageRecord struct {
-	ID                   string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	ReservationID        string    `gorm:"column:reservation_id;type:uuid;not null;unique"`
-	UserID               string    `gorm:"column:user_id;type:uuid;not null;index"`
-	MeetingID            string    `gorm:"column:meeting_id;type:uuid;not null;uniqueIndex:uk_meeting_usage_kind,priority:1"`
-	PeriodStart          time.Time `gorm:"column:period_start;not null;index"`
-	PeriodEnd            time.Time `gorm:"column:period_end;not null"`
-	UsageKind            string    `gorm:"column:usage_kind;size:24;not null;uniqueIndex:uk_meeting_usage_kind,priority:2"`
-	ActualSeconds        int64     `gorm:"column:actual_seconds;not null"`
-	ProviderUsageSeconds int64     `gorm:"column:provider_usage_seconds;not null;default:0"`
-	SettlementReason     string    `gorm:"column:settlement_reason;size:32;not null"`
-	SettledAt            time.Time `gorm:"column:settled_at;not null"`
-	CreatedAt            time.Time `gorm:"not null;autoCreateTime"`
-	UpdatedAt            time.Time `gorm:"not null;autoUpdateTime"`
-}
-
-func (MeetingUsageRecord) TableName() string { return "meeting_usage_records" }
 
 type Meeting struct {
 	ID                              string          `gorm:"type:uuid;primaryKey"`
@@ -287,6 +240,15 @@ type Meeting struct {
 	Language                        string          `gorm:"size:16;not null"`
 	RetainAudio                     bool            `gorm:"column:retain_audio;not null;default:false"`
 	GrantedAudioSeconds             int64           `gorm:"column:granted_audio_seconds;not null"`
+	QuotaPeriodStart                time.Time       `gorm:"column:quota_period_start;not null;index"`
+	QuotaPeriodEnd                  time.Time       `gorm:"column:quota_period_end;not null"`
+	ReportedAudioSeconds            int64           `gorm:"column:reported_audio_seconds;not null;default:0"`
+	ActualAudioSeconds              int64           `gorm:"column:actual_audio_seconds;not null;default:0"`
+	ProviderUsageSeconds            int64           `gorm:"column:provider_usage_seconds;not null;default:0"`
+	QuotaStatus                     string          `gorm:"column:quota_status;size:16;not null;default:active;index"`
+	QuotaExpiresAt                  time.Time       `gorm:"column:quota_expires_at;not null;index"`
+	QuotaFinalizedAt                *time.Time      `gorm:"column:quota_finalized_at"`
+	QuotaSettlementReason           string          `gorm:"column:quota_settlement_reason;size:32;not null;default:''"`
 	TranscriptionSessionID          *string         `gorm:"column:transcription_session_id;type:uuid"`
 	WebSocketURL                    string          `gorm:"column:websocket_url;type:text;not null;default:''"`
 	SessionExpiresAt                *time.Time      `gorm:"column:session_expires_at"`
@@ -296,6 +258,7 @@ type Meeting struct {
 	AudioChunkDurationMS            int32           `gorm:"column:audio_chunk_duration_ms;not null;default:0"`
 	AudioMaxChunkBytes              int32           `gorm:"column:audio_max_chunk_bytes;not null;default:0"`
 	TranscriptRevision              int64           `gorm:"column:transcript_revision;not null;default:0"`
+	TranscriptSegments              json.RawMessage `gorm:"column:transcript_segments;type:jsonb;not null;default:'[]'"`
 	SummaryStatus                   string          `gorm:"column:summary_status;size:24;not null;default:not_started;index"`
 	SummaryVersion                  int64           `gorm:"column:summary_version;not null;default:0"`
 	SummarySourceTranscriptRevision int64           `gorm:"column:summary_source_transcript_revision;not null;default:0"`
@@ -316,30 +279,3 @@ type Meeting struct {
 }
 
 func (Meeting) TableName() string { return "meetings" }
-
-type MeetingTranscriptSegment struct {
-	ID            string    `gorm:"type:uuid;primaryKey"`
-	MeetingID     string    `gorm:"column:meeting_id;type:uuid;not null;uniqueIndex:uk_meeting_segment_sequence,priority:1;uniqueIndex:uk_meeting_segment_id,priority:1"`
-	SegmentID     string    `gorm:"column:segment_id;type:uuid;not null;uniqueIndex:uk_meeting_segment_id,priority:2"`
-	SequenceNo    int64     `gorm:"column:sequence_no;not null;uniqueIndex:uk_meeting_segment_sequence,priority:2"`
-	StartOffsetMS int64     `gorm:"column:start_offset_ms;not null"`
-	EndOffsetMS   int64     `gorm:"column:end_offset_ms;not null"`
-	SpeakerLabel  string    `gorm:"column:speaker_label;size:80;not null;default:''"`
-	Content       string    `gorm:"type:text;not null"`
-	Language      string    `gorm:"size:16;not null"`
-	Confidence    *float32  `gorm:"type:real"`
-	CreatedAt     time.Time `gorm:"column:created_at;not null"`
-	InsertedAt    time.Time `gorm:"column:inserted_at;not null;autoCreateTime"`
-}
-
-func (MeetingTranscriptSegment) TableName() string { return "meeting_transcript_segments" }
-
-type MeetingTranscriptBatch struct {
-	ID             string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	MeetingID      string    `gorm:"column:meeting_id;type:uuid;not null;uniqueIndex:uk_meeting_transcript_batch,priority:1"`
-	BatchID        string    `gorm:"column:batch_id;type:uuid;not null;uniqueIndex:uk_meeting_transcript_batch,priority:2"`
-	LastSequenceNo int64     `gorm:"column:last_sequence_no;not null"`
-	CreatedAt      time.Time `gorm:"not null;autoCreateTime"`
-}
-
-func (MeetingTranscriptBatch) TableName() string { return "meeting_transcript_batches" }

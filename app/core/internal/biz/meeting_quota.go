@@ -12,37 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// MeetingQuotaOverrideStatus controls whether a stored user override applies.
-type MeetingQuotaOverrideStatus uint8
-
-const (
-	MeetingQuotaOverrideStatusUnspecified MeetingQuotaOverrideStatus = iota
-	MeetingQuotaOverrideStatusActive
-	MeetingQuotaOverrideStatusDisabled
-)
-
-func (s MeetingQuotaOverrideStatus) String() string {
-	switch s {
-	case MeetingQuotaOverrideStatusActive:
-		return "active"
-	case MeetingQuotaOverrideStatusDisabled:
-		return "disabled"
-	default:
-		return ""
-	}
-}
-
-func ParseMeetingQuotaOverrideStatus(raw string) (MeetingQuotaOverrideStatus, error) {
-	switch raw {
-	case MeetingQuotaOverrideStatusActive.String():
-		return MeetingQuotaOverrideStatusActive, nil
-	case MeetingQuotaOverrideStatusDisabled.String():
-		return MeetingQuotaOverrideStatusDisabled, nil
-	default:
-		return MeetingQuotaOverrideStatusUnspecified, fmt.Errorf("unknown meeting quota override status %q", raw)
-	}
-}
-
 // MeetingUsageReservationStatus is the lifecycle of reserved monthly quota.
 type MeetingUsageReservationStatus uint8
 
@@ -207,15 +176,6 @@ type MeetingQuotaPolicy struct {
 	RedisFailurePolicy     RedisQuotaFailurePolicy
 }
 
-// MeetingQuotaOverride contains optional per-user policy replacements.
-type MeetingQuotaOverride struct {
-	UserID                 string
-	Status                 MeetingQuotaOverrideStatus
-	MonthlyAudioSeconds    *int64
-	MaxMeetingAudioSeconds *int64
-	MaxConcurrentMeetings  *int32
-}
-
 // MeetingBillingPeriod is a half-open monthly interval stored in UTC.
 type MeetingBillingPeriod struct {
 	Start time.Time
@@ -298,17 +258,11 @@ type MeetingCreateRateDecision struct {
 }
 
 var (
-	ErrMeetingQuotaOverrideNotFound    = stderrors.New("meeting quota override not found")
 	ErrMeetingQuotaReservationNotFound = stderrors.New("meeting quota reservation not found")
 	ErrMeetingQuotaExceeded            = stderrors.New("meeting quota exceeded")
-	ErrMeetingConcurrentLimit          = stderrors.New("meeting concurrent limit reached")
-	ErrMeetingReservationConflict      = stderrors.New("meeting reservation conflict")
 )
 
 type MeetingQuotaRepo interface {
-	GetOverride(context.Context, string) (*MeetingQuotaOverride, error)
-	FindReservationByMeeting(context.Context, string, string) (*MeetingUsageReservation, error)
-	Reserve(context.Context, MeetingQuotaReserveInput) (*MeetingQuotaReservationResult, error)
 	ReportUsage(context.Context, string, string, int64, time.Time) (*MeetingUsageReservation, error)
 	Finalize(context.Context, MeetingQuotaFinalizeInput) (*MeetingUsageRecord, error)
 	GetSnapshot(context.Context, string, MeetingBillingPeriod, MeetingQuotaPolicy, time.Time) (*MeetingQuotaSnapshot, error)
@@ -345,43 +299,6 @@ func NewMeetingQuotaUsecase(policies MeetingQuotaPolicyProvider, repo MeetingQuo
 	return &MeetingQuotaUsecase{policies: policies, repo: repo, rateLimiter: limiter}, nil
 }
 
-func (uc *MeetingQuotaUsecase) Reserve(ctx context.Context, userID, meetingID string, now time.Time) (*MeetingQuotaReservationResult, error) {
-	if err := validateQuotaIdentifiers(userID, meetingID); err != nil {
-		return nil, err
-	}
-	now = normalizedQuotaTime(now)
-	existing, err := uc.repo.FindReservationByMeeting(ctx, userID, meetingID)
-	if err == nil {
-		policy, policyErr := uc.effectivePolicy(ctx, userID)
-		if policyErr != nil {
-			return nil, policyErr
-		}
-		quota, quotaErr := uc.repo.GetSnapshot(ctx, userID, policy.PeriodAt(now), policy, now)
-		if quotaErr != nil {
-			return nil, quotaErr
-		}
-		return &MeetingQuotaReservationResult{Reservation: existing, Quota: quota, Existing: true}, nil
-	}
-	if !stderrors.Is(err, ErrMeetingQuotaReservationNotFound) {
-		return nil, err
-	}
-	input, err := uc.AuthorizeReservation(ctx, userID, meetingID, now)
-	if err != nil {
-		return nil, err
-	}
-	result, err := uc.repo.Reserve(ctx, input)
-	if stderrors.Is(err, ErrMeetingQuotaExceeded) {
-		return nil, kratoserrors.TooManyRequests("MEETING_QUOTA_EXCEEDED", "meeting audio quota is exhausted")
-	}
-	if stderrors.Is(err, ErrMeetingConcurrentLimit) {
-		return nil, kratoserrors.TooManyRequests("MEETING_CONCURRENT_LIMIT_REACHED", "too many active meetings")
-	}
-	if stderrors.Is(err, ErrMeetingReservationConflict) {
-		return nil, kratoserrors.Conflict("MEETING_RESERVATION_CONFLICT", "meeting already belongs to another quota reservation")
-	}
-	return result, err
-}
-
 // AuthorizeReservation performs boundary, rate-limit and policy checks without
 // writing PostgreSQL. Meeting creation uses the returned input in its own
 // transaction so the meeting and reservation commit atomically.
@@ -408,10 +325,7 @@ func (uc *MeetingQuotaUsecase) AuthorizeReservation(ctx context.Context, userID,
 		})
 	}
 
-	policy, err := uc.effectivePolicyWithDefault(ctx, userID, defaults)
-	if err != nil {
-		return MeetingQuotaReserveInput{}, err
-	}
+	policy := defaults
 	return MeetingQuotaReserveInput{
 		ReservationID: uuid.NewString(), UserID: userID, MeetingID: meetingID, Period: policy.PeriodAt(now), Policy: policy,
 		Now: now, ExpiresAt: now.Add(policy.ReservationTTL),
@@ -460,7 +374,7 @@ func (uc *MeetingQuotaUsecase) GetQuota(ctx context.Context, userID string, now 
 	if _, err := uuid.Parse(userID); err != nil {
 		return nil, kratoserrors.BadRequest("USER_ID_INVALID", "user ID must be a UUID")
 	}
-	policy, err := uc.effectivePolicy(ctx, userID)
+	policy, err := uc.effectivePolicy(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -496,46 +410,12 @@ func (uc *MeetingQuotaUsecase) ReconcileExpired(ctx context.Context, now time.Ti
 	return completed, nil
 }
 
-func (uc *MeetingQuotaUsecase) effectivePolicy(ctx context.Context, userID string) (MeetingQuotaPolicy, error) {
+func (uc *MeetingQuotaUsecase) effectivePolicy(ctx context.Context) (MeetingQuotaPolicy, error) {
 	defaults, err := uc.policies.GetDefaultPolicy(ctx)
 	if err != nil {
 		return MeetingQuotaPolicy{}, kratoserrors.ServiceUnavailable("MEETING_QUOTA_POLICY_UNAVAILABLE", "meeting quota policy is temporarily unavailable").WithCause(err)
 	}
-	return uc.effectivePolicyWithDefault(ctx, userID, defaults)
-}
-
-func (uc *MeetingQuotaUsecase) effectivePolicyWithDefault(ctx context.Context, userID string, defaults MeetingQuotaPolicy) (MeetingQuotaPolicy, error) {
-	override, err := uc.repo.GetOverride(ctx, userID)
-	if stderrors.Is(err, ErrMeetingQuotaOverrideNotFound) {
-		return defaults, nil
-	}
-	if err != nil {
-		return MeetingQuotaPolicy{}, err
-	}
-	return defaults.WithOverride(override)
-}
-
-func (p MeetingQuotaPolicy) WithOverride(override *MeetingQuotaOverride) (MeetingQuotaPolicy, error) {
-	if override == nil || override.Status == MeetingQuotaOverrideStatusDisabled {
-		return p, nil
-	}
-	if override.Status != MeetingQuotaOverrideStatusActive {
-		return MeetingQuotaPolicy{}, fmt.Errorf("meeting quota override status is invalid")
-	}
-	effective := p
-	if override.MonthlyAudioSeconds != nil {
-		effective.MonthlyAudioSeconds = *override.MonthlyAudioSeconds
-	}
-	if override.MaxMeetingAudioSeconds != nil {
-		effective.MaxMeetingAudioSeconds = *override.MaxMeetingAudioSeconds
-	}
-	if override.MaxConcurrentMeetings != nil {
-		effective.MaxConcurrentMeetings = *override.MaxConcurrentMeetings
-	}
-	if err := validateMeetingQuotaPolicy(effective); err != nil {
-		return MeetingQuotaPolicy{}, fmt.Errorf("invalid meeting quota override: %w", err)
-	}
-	return effective, nil
+	return defaults, nil
 }
 
 func (p MeetingQuotaPolicy) PeriodAt(at time.Time) MeetingBillingPeriod {

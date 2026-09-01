@@ -363,8 +363,15 @@ func (s *Session) writerLoop() {
 
 func (s *Session) readerLoop() {
 	defer close(s.events)
+	// ReadTimeout protects the initial task-started handshake only. During a
+	// meeting Paraformer may legitimately emit no recognition event while the
+	// audio is silent, so a per-event deadline would terminate healthy sessions.
+	if err := s.conn.SetReadDeadline(time.Time{}); err != nil {
+		s.terminate(providerError(ErrorCodeConnectionLost, err))
+		return
+	}
 	for {
-		event, err := readEvent(s.conn, s.cfg.ReadTimeout)
+		event, err := readEvent(s.conn, 0)
 		if err != nil {
 			select {
 			case <-s.done:
@@ -511,8 +518,10 @@ func writeJSON(conn *websocket.Conn, value any, timeout time.Duration) error {
 }
 
 func readEvent(conn *websocket.Conn, timeout time.Duration) (*serverEvent, error) {
-	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
-		return nil, err
+	if timeout > 0 {
+		if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+			return nil, err
+		}
 	}
 	messageType, payload, err := conn.ReadMessage()
 	if err != nil {

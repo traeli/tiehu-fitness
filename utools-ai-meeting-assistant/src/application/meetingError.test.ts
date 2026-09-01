@@ -18,6 +18,17 @@ describe("meeting error mapping", () => {
     expect(result.message).not.toContain("provider detail");
   });
 
+  it("maps an active meeting conflict without degrading to unknown error", () => {
+    const result = toMeetingError(
+      new ApiError("too many active meetings", 429, "MEETING_CONCURRENT_LIMIT_REACHED"),
+      "start",
+    );
+
+    expect(result.code).toBe("MEETING_CONCURRENT_LIMIT_REACHED");
+    expect(result.title).toBe("已有会议尚未结束");
+    expect(result.retryable).toBe(true);
+  });
+
   it("explains missing uTools server authentication without exposing backend details", () => {
     const result = toMeetingError(
       new ApiError(

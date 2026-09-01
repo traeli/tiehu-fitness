@@ -245,17 +245,16 @@ func TestMeetingRepositoryLifecycleIdempotencyOwnershipAndTranscript(t *testing.
 		t.Fatalf("non-owner transcript list error = %v", err)
 	}
 
-	var segmentCount, batchCount int64
-	if err := db.WithContext(context.Background()).Model(&model.MeetingTranscriptSegment{}).
-		Where("meeting_id = ?", first.Meeting.ID).Count(&segmentCount).Error; err != nil {
+	var transcriptMeeting model.Meeting
+	if err := db.WithContext(context.Background()).Where("id = ?", first.Meeting.ID).Take(&transcriptMeeting).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(context.Background()).Model(&model.MeetingTranscriptBatch{}).
-		Where("meeting_id = ?", first.Meeting.ID).Count(&batchCount).Error; err != nil {
+	persistedSegments, err := decodeTranscriptSegments(first.Meeting.ID, transcriptMeeting.TranscriptSegments)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if segmentCount != 2 || batchCount != 1 {
-		t.Fatalf("transcript persistence counts = segments %d, batches %d", segmentCount, batchCount)
+	if len(persistedSegments) != 2 {
+		t.Fatalf("compact transcript segment count = %d", len(persistedSegments))
 	}
 }
 
@@ -278,14 +277,10 @@ func TestMeetingPreparationFailureAtomicallyReleasesQuota(t *testing.T) {
 	if meetingRow.Status != biz.MeetingStatusFailed.String() || meetingRow.TranscriptionStatus != biz.MeetingTranscriptionStatusFailed.String() {
 		t.Fatalf("failed meeting row = %#v", meetingRow)
 	}
-	var reservation model.MeetingUsageReservation
-	if err := db.WithContext(context.Background()).Where("meeting_id = ?", meetingRow.ID).Take(&reservation).Error; err != nil {
-		t.Fatal(err)
+	if meetingRow.QuotaStatus != biz.MeetingUsageReservationStatusReleased.String() || meetingRow.QuotaFinalizedAt == nil {
+		t.Fatalf("released quota on meeting = %#v", meetingRow)
 	}
-	if reservation.Status != biz.MeetingUsageReservationStatusReleased.String() || reservation.FinalizedAt == nil {
-		t.Fatalf("released reservation = %#v", reservation)
-	}
-	var period model.MeetingUsagePeriod
+	var period model.UserMeetingMonthlyQuota
 	if err := db.WithContext(context.Background()).Where("user_id = ?", userID).Take(&period).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -341,20 +336,17 @@ func TestMeetingTranscriptionCompletionAtomicallySettlesAndReleasesQuota(t *test
 	if summaryTaskCount != 2 {
 		t.Fatalf("summary task submissions = %d, want 2 idempotent submissions", summaryTaskCount)
 	}
-	var reservation model.MeetingUsageReservation
-	if err := db.WithContext(context.Background()).Where("reservation_id = ?", created.Meeting.ReservationID).Take(&reservation).Error; err != nil {
+	var settledMeeting model.Meeting
+	if err := db.WithContext(context.Background()).Where("reservation_id = ?", created.Meeting.ReservationID).Take(&settledMeeting).Error; err != nil {
 		t.Fatal(err)
 	}
-	var period model.MeetingUsagePeriod
-	if err := db.WithContext(context.Background()).Where("user_id = ? AND period_start = ?", userID, reservation.PeriodStart).Take(&period).Error; err != nil {
+	var period model.UserMeetingMonthlyQuota
+	if err := db.WithContext(context.Background()).Where("user_id = ? AND period_start = ?", userID, settledMeeting.QuotaPeriodStart).Take(&period).Error; err != nil {
 		t.Fatal(err)
 	}
-	var usageCount int64
-	if err := db.WithContext(context.Background()).Model(&model.MeetingUsageRecord{}).Where("reservation_id = ?", reservation.ID).Count(&usageCount).Error; err != nil {
-		t.Fatal(err)
-	}
-	if reservation.Status != biz.MeetingUsageReservationStatusSettled.String() || period.ReservedSeconds != 0 || period.ConsumedSeconds != 2 || usageCount != 1 {
-		t.Fatalf("settled ledger = reservation %#v, period %#v, usage rows %d", reservation, period, usageCount)
+	if settledMeeting.QuotaStatus != biz.MeetingUsageReservationStatusSettled.String() || settledMeeting.ActualAudioSeconds != 2 ||
+		period.ReservedSeconds != 0 || period.ConsumedSeconds != 2 {
+		t.Fatalf("settled compact ledger = meeting %#v, period %#v", settledMeeting, period)
 	}
 	vision.mu.Lock()
 	vision.session = nil
@@ -386,14 +378,11 @@ func newMeetingDataTestUsecase(t *testing.T, db *gorm.DB, gateway biz.VisionTran
 
 func assertMeetingRowCounts(t *testing.T, db *gorm.DB, userID string, meetings, reservations int64) {
 	t.Helper()
-	var meetingCount, reservationCount int64
+	var meetingCount int64
 	if err := db.WithContext(context.Background()).Model(&model.Meeting{}).Where("user_id = ?", userID).Count(&meetingCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(context.Background()).Model(&model.MeetingUsageReservation{}).Where("user_id = ?", userID).Count(&reservationCount).Error; err != nil {
-		t.Fatal(err)
-	}
-	if meetingCount != meetings || reservationCount != reservations {
-		t.Fatalf("row counts = meetings %d, reservations %d; want %d, %d", meetingCount, reservationCount, meetings, reservations)
+	if meetingCount != meetings || meetingCount != reservations {
+		t.Fatalf("compact row count = meetings %d; want meetings %d and logical reservations %d", meetingCount, meetings, reservations)
 	}
 }

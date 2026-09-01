@@ -27,6 +27,9 @@ func AutoMigrateSchema(ctx context.Context, db *gorm.DB) error {
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", coreSchemaAdvisoryLockKey).Error; err != nil {
 			return fmt.Errorf("lock core schema migration: %w", err)
 		}
+		if err := compactLegacyMeetingStorage(tx); err != nil {
+			return fmt.Errorf("compact legacy meeting storage: %w", err)
+		}
 		if err := tx.AutoMigrate(coreSchemaModels()...); err != nil {
 			return fmt.Errorf("auto migrate core schema: %w", err)
 		}
@@ -35,9 +38,6 @@ func AutoMigrateSchema(ctx context.Context, db *gorm.DB) error {
 		}
 		if err := seedCoreBootstrapData(tx); err != nil {
 			return fmt.Errorf("seed core bootstrap data: %w", err)
-		}
-		if err := backfillLegacyMeetingQuotaPeriods(tx); err != nil {
-			return fmt.Errorf("backfill legacy meeting quota periods: %w", err)
 		}
 		return nil
 	})
@@ -59,15 +59,106 @@ func coreSchemaModels() []any {
 		&model.WorkoutSet{},
 		&model.CheckIn{},
 		&model.MeetingQuotaPolicy{},
-		&model.UserMeetingQuotaOverride{},
-		&model.MeetingUsagePeriod{},
+		&model.UserMeetingMonthlyQuota{},
 		&model.Order{},
-		&model.MeetingUsageReservation{},
-		&model.MeetingUsageRecord{},
 		&model.Meeting{},
-		&model.MeetingTranscriptSegment{},
-		&model.MeetingTranscriptBatch{},
 	}
+}
+
+// compactLegacyMeetingStorage migrates the former normalized meeting quota
+// and transcript tables into meetings plus one monthly balance row per user.
+// It is an idempotent startup bridge for environments that use AutoMigrate;
+// migration 000012 is the deployable schema contract.
+func compactLegacyMeetingStorage(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable("meeting_usage_periods") {
+		return nil
+	}
+	return tx.Exec(`
+		ALTER TABLE meeting_usage_periods
+			ADD COLUMN IF NOT EXISTS base_quota_seconds BIGINT NOT NULL DEFAULT 0,
+			ADD COLUMN IF NOT EXISTS purchased_quota_seconds BIGINT NOT NULL DEFAULT 0;
+
+		UPDATE meeting_usage_periods AS monthly
+		SET base_quota_seconds = COALESCE(
+			(SELECT monthly_audio_seconds FROM user_meeting_quota_overrides
+			 WHERE user_id = monthly.user_id AND status = 'active' AND monthly_audio_seconds IS NOT NULL),
+			(SELECT monthly_audio_seconds FROM meeting_quota_policies WHERE id = 1)
+		)
+		WHERE monthly.base_quota_seconds = 0;
+
+		ALTER TABLE meetings
+			ADD COLUMN IF NOT EXISTS quota_period_start TIMESTAMPTZ,
+			ADD COLUMN IF NOT EXISTS quota_period_end TIMESTAMPTZ,
+			ADD COLUMN IF NOT EXISTS reported_audio_seconds BIGINT NOT NULL DEFAULT 0,
+			ADD COLUMN IF NOT EXISTS actual_audio_seconds BIGINT NOT NULL DEFAULT 0,
+			ADD COLUMN IF NOT EXISTS provider_usage_seconds BIGINT NOT NULL DEFAULT 0,
+			ADD COLUMN IF NOT EXISTS quota_status VARCHAR(16),
+			ADD COLUMN IF NOT EXISTS quota_expires_at TIMESTAMPTZ,
+			ADD COLUMN IF NOT EXISTS quota_finalized_at TIMESTAMPTZ,
+			ADD COLUMN IF NOT EXISTS quota_settlement_reason VARCHAR(32) NOT NULL DEFAULT '',
+			ADD COLUMN IF NOT EXISTS transcript_segments JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+		UPDATE meetings AS meeting
+		SET quota_period_start = reservation.period_start,
+			quota_period_end = reservation.period_end,
+			reported_audio_seconds = reservation.reported_seconds,
+			actual_audio_seconds = COALESCE(usage.actual_seconds, 0),
+			provider_usage_seconds = COALESCE(usage.provider_usage_seconds, 0),
+			quota_status = reservation.status,
+			quota_expires_at = reservation.expires_at,
+			quota_finalized_at = reservation.finalized_at,
+			quota_settlement_reason = COALESCE(usage.settlement_reason, '')
+		FROM meeting_usage_reservations AS reservation
+		LEFT JOIN meeting_usage_records AS usage ON usage.reservation_id = reservation.reservation_id
+		WHERE meeting.reservation_id = reservation.reservation_id;
+
+		UPDATE meetings AS meeting
+		SET transcript_segments = transcript.payload
+		FROM (
+			SELECT meeting_id, jsonb_agg(jsonb_build_object(
+				'id', segment_id,
+				'sequence_no', sequence_no,
+				'start_offset_ms', start_offset_ms,
+				'end_offset_ms', end_offset_ms,
+				'speaker_label', speaker_label,
+				'content', content,
+				'language', language,
+				'confidence', confidence,
+				'created_at', created_at
+			) ORDER BY sequence_no) AS payload
+			FROM meeting_transcript_segments
+			GROUP BY meeting_id
+		) AS transcript
+		WHERE meeting.id = transcript.meeting_id;
+
+		SET CONSTRAINTS ALL IMMEDIATE;
+
+		ALTER TABLE meetings
+			ALTER COLUMN quota_period_start SET NOT NULL,
+			ALTER COLUMN quota_period_end SET NOT NULL,
+			ALTER COLUMN quota_status SET NOT NULL,
+			ALTER COLUMN quota_status SET DEFAULT 'active',
+			ALTER COLUMN quota_expires_at SET NOT NULL,
+			DROP CONSTRAINT IF EXISTS fk_meeting_usage_reservation;
+
+		ALTER TABLE meeting_usage_periods RENAME TO user_meeting_monthly_quotas;
+
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_schema = current_schema() AND table_name = 'orders' AND column_name = 'usage_period_id'
+			) THEN
+				ALTER TABLE orders RENAME COLUMN usage_period_id TO monthly_quota_id;
+			END IF;
+		END $$;
+
+		DROP TABLE IF EXISTS meeting_transcript_batches;
+		DROP TABLE IF EXISTS meeting_transcript_segments;
+		DROP TABLE IF EXISTS meeting_usage_records;
+		DROP TABLE IF EXISTS meeting_usage_reservations;
+		DROP TABLE IF EXISTS user_meeting_quota_overrides;
+	`).Error
 }
 
 // compactLegacyMeetingSummaries is an idempotent bridge for development
@@ -114,30 +205,6 @@ func compactLegacyMeetingSummaries(tx *gorm.DB) error {
 		return err
 	}
 	return tx.Migrator().DropTable("meeting_summaries")
-}
-
-// backfillLegacyMeetingQuotaPeriods bridges development databases that were
-// auto-migrated before monthly policy snapshots existed. Deployed databases
-// use migration 000011, which performs the same deterministic backfill.
-func backfillLegacyMeetingQuotaPeriods(tx *gorm.DB) error {
-	return tx.Exec(`
-		UPDATE meeting_usage_periods AS usage_period
-		SET base_quota_seconds = COALESCE(
-			(
-				SELECT quota_override.monthly_audio_seconds
-				FROM user_meeting_quota_overrides AS quota_override
-				WHERE quota_override.user_id = usage_period.user_id
-				  AND quota_override.status = 'active'
-				  AND quota_override.monthly_audio_seconds IS NOT NULL
-			),
-			(
-				SELECT quota_policy.monthly_audio_seconds
-				FROM meeting_quota_policies AS quota_policy
-				WHERE quota_policy.id = 1
-			)
-		)
-		WHERE usage_period.base_quota_seconds = 0
-	`).Error
 }
 
 func seedCoreBootstrapData(tx *gorm.DB) error {

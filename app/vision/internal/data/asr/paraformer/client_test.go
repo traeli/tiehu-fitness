@@ -129,6 +129,55 @@ func TestProviderLifecycleAndTranscriptMapping(t *testing.T) {
 	assertServerError(t, serverErrors)
 }
 
+func TestProviderRuntimeDoesNotExpireWhileWaitingForRecognitionEvent(t *testing.T) {
+	serverErrors := make(chan error, 1)
+	endpoint, closeServer := fakeProviderServer(t, func(conn *websocket.Conn, _ *http.Request) error {
+		var start runTask
+		if err := conn.ReadJSON(&start); err != nil {
+			return err
+		}
+		if err := writeServerEvent(conn, start.Header.TaskID, "task-started", nil); err != nil {
+			return err
+		}
+		messageType, _, err := conn.ReadMessage()
+		if err != nil {
+			return err
+		}
+		if messageType != websocket.BinaryMessage {
+			return fmt.Errorf("expected binary audio")
+		}
+		// This pause is longer than the startup read timeout. It represents a
+		// healthy meeting interval during which the provider has no transcript.
+		time.Sleep(80 * time.Millisecond)
+		var finish finishTask
+		if err := conn.ReadJSON(&finish); err != nil {
+			return err
+		}
+		return writeServerEvent(conn, start.Header.TaskID, "task-finished", nil)
+	}, serverErrors)
+	defer closeServer()
+
+	cfg := testConfig(endpoint, 8)
+	cfg.ReadTimeout = 30 * time.Millisecond
+	provider, err := NewProvider(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := provider.Start(context.Background(), testBusinessSession(biz.MeetingLanguageAuto), testAudioSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.PushAudio(context.Background(), biz.AudioChunk{
+		SessionID: testBusinessSessionID, Sequence: 1, Data: []byte{1, 2, 3, 4},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.Finish(context.Background()); err != nil {
+		t.Fatalf("Finish() after quiet provider interval error = %v", err)
+	}
+	assertServerError(t, serverErrors)
+}
+
 func TestProviderStartTaskFailureDoesNotLeakSecret(t *testing.T) {
 	serverErrors := make(chan error, 1)
 	endpoint, closeServer := fakeProviderServer(t, func(conn *websocket.Conn, _ *http.Request) error {

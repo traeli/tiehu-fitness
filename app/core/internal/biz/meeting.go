@@ -162,6 +162,11 @@ func (s MeetingTranscriptionStatus) CanTransitionTo(next MeetingTranscriptionSta
 	}
 }
 
+func (s MeetingTranscriptionStatus) IsTerminal() bool {
+	return s == MeetingTranscriptionStatusSucceeded || s == MeetingTranscriptionStatusFailed ||
+		s == MeetingTranscriptionStatusCancelled || s == MeetingTranscriptionStatusExpired
+}
+
 type MeetingLanguage uint8
 
 const (
@@ -286,8 +291,17 @@ type PrepareMeetingTranscriptionInput struct {
 type CancelMeetingTranscriptionInput struct {
 	SessionID      string
 	MeetingID      string
+	Reason         MeetingTranscriptionCancelReason
 	IdempotencyKey string
 }
+
+type MeetingTranscriptionCancelReason uint8
+
+const (
+	MeetingTranscriptionCancelReasonUnspecified MeetingTranscriptionCancelReason = iota
+	MeetingTranscriptionCancelReasonUserCancelled
+	MeetingTranscriptionCancelReasonPrepareCompensation
+)
 
 type PrepareMeetingSummaryInput struct {
 	MeetingID                string
@@ -411,9 +425,6 @@ func (uc *MeetingUsecase) Create(ctx context.Context, command CreateMeetingComma
 	if stderrors.Is(err, ErrMeetingQuotaExceeded) {
 		return nil, kratoserrors.TooManyRequests("MEETING_QUOTA_EXCEEDED", "meeting audio quota is exhausted")
 	}
-	if stderrors.Is(err, ErrMeetingConcurrentLimit) {
-		return nil, kratoserrors.TooManyRequests("MEETING_CONCURRENT_LIMIT_REACHED", "too many active meetings")
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +472,8 @@ func (uc *MeetingUsecase) prepareNew(ctx context.Context, meeting *Meeting, now 
 		return &CreateMeetingResult{Meeting: updated, Session: session}, nil
 	}
 	cancelErr := uc.vision.CancelTranscription(ctx, CancelMeetingTranscriptionInput{
-		SessionID: session.ID, MeetingID: meeting.ID, IdempotencyKey: "prepare-compensation:" + meeting.ID,
+		SessionID: session.ID, MeetingID: meeting.ID, Reason: MeetingTranscriptionCancelReasonPrepareCompensation,
+		IdempotencyKey: "prepare-compensation:" + meeting.ID,
 	})
 	compensateErr := uc.compensatePreparation(ctx, meeting, now)
 	return nil, kratoserrors.InternalServer("MEETING_PREPARATION_COMMIT_FAILED", "failed to persist transcription session").WithCause(stderrors.Join(err, cancelErr, compensateErr))
@@ -473,9 +485,6 @@ func (uc *MeetingUsecase) compensatePreparation(ctx context.Context, meeting *Me
 }
 
 func (uc *MeetingUsecase) Stop(ctx context.Context, userID, meetingID, idempotencyKey string, now time.Time) (*Meeting, error) {
-	// The frozen client protocol finishes the vision WebSocket before calling
-	// core Stop. Cross-service completion and quota settlement belong to B-800;
-	// this use case owns only the idempotent core control-plane transition.
 	if err := validateMeetingIdentity(userID, meetingID); err != nil {
 		return nil, err
 	}
@@ -483,7 +492,25 @@ func (uc *MeetingUsecase) Stop(ctx context.Context, userID, meetingID, idempoten
 		return nil, err
 	}
 	meeting, err := uc.repo.Stop(ctx, userID, meetingID, idempotencyKey, normalizedMeetingTime(now))
-	return meeting, mapMeetingRepoError(err)
+	if err != nil {
+		return nil, mapMeetingRepoError(err)
+	}
+	if meeting == nil {
+		return nil, kratoserrors.InternalServer("MEETING_STOP_RESULT_INVALID", "meeting stop returned invalid data")
+	}
+	// The browser normally finishes WSS first. This cancellation is the
+	// server-side fallback for startup failures, lost sockets, and clients that
+	// disappear before sending the finish handshake. Vision persists a terminal
+	// outbox event before returning, so Core can release the quota reservation.
+	if meeting.TranscriptionSessionID != "" && !meeting.TranscriptionStatus.IsTerminal() {
+		if err := uc.vision.CancelTranscription(ctx, CancelMeetingTranscriptionInput{
+			SessionID: meeting.TranscriptionSessionID, MeetingID: meeting.ID,
+			Reason: MeetingTranscriptionCancelReasonUserCancelled, IdempotencyKey: "user-stop:" + meeting.ID,
+		}); err != nil {
+			return nil, kratoserrors.ServiceUnavailable("VISION_CANCELLATION_PENDING", "meeting stopped but transcription cancellation is pending").WithCause(err)
+		}
+	}
+	return meeting, nil
 }
 
 func (uc *MeetingUsecase) Get(ctx context.Context, userID, meetingID string) (*Meeting, error) {

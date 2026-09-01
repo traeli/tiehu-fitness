@@ -13,13 +13,10 @@ import (
 type quotaFakeRepo struct {
 	defaultPolicy  MeetingQuotaPolicy
 	policyErr      error
-	override       *MeetingQuotaOverride
 	reservation    *MeetingUsageReservation
 	snapshot       *MeetingQuotaSnapshot
-	reserveErr     error
 	reportErr      error
 	finalizeErr    error
-	reserveInput   MeetingQuotaReserveInput
 	finalizeInput  MeetingQuotaFinalizeInput
 	snapshotPolicy MeetingQuotaPolicy
 }
@@ -29,37 +26,6 @@ func (r *quotaFakeRepo) GetDefaultPolicy(context.Context) (MeetingQuotaPolicy, e
 		return MeetingQuotaPolicy{}, r.policyErr
 	}
 	return r.defaultPolicy, nil
-}
-
-func (r *quotaFakeRepo) GetOverride(context.Context, string) (*MeetingQuotaOverride, error) {
-	if r.override == nil {
-		return nil, ErrMeetingQuotaOverrideNotFound
-	}
-	return r.override, nil
-}
-
-func (r *quotaFakeRepo) FindReservationByMeeting(context.Context, string, string) (*MeetingUsageReservation, error) {
-	if r.reservation == nil {
-		return nil, ErrMeetingQuotaReservationNotFound
-	}
-	return r.reservation, nil
-}
-
-func (r *quotaFakeRepo) Reserve(_ context.Context, input MeetingQuotaReserveInput) (*MeetingQuotaReservationResult, error) {
-	r.reserveInput = input
-	if r.reserveErr != nil {
-		return nil, r.reserveErr
-	}
-	grant := input.Policy.MaxMeetingAudioSeconds
-	if grant > input.Policy.MonthlyAudioSeconds {
-		grant = input.Policy.MonthlyAudioSeconds
-	}
-	r.reservation = &MeetingUsageReservation{
-		ID: uuid.NewString(), UserID: input.UserID, MeetingID: input.MeetingID,
-		Period: input.Period, GrantedSeconds: grant, Status: MeetingUsageReservationStatusActive,
-		ExpiresAt: input.ExpiresAt,
-	}
-	return &MeetingQuotaReservationResult{Reservation: r.reservation, Quota: r.snapshot}, nil
 }
 
 func (r *quotaFakeRepo) ReportUsage(_ context.Context, _, _ string, total int64, _ time.Time) (*MeetingUsageReservation, error) {
@@ -160,39 +126,12 @@ func TestMeetingQuotaPolicyUsesShanghaiNaturalMonth(t *testing.T) {
 	}
 }
 
-func TestMeetingQuotaPolicyAppliesOnlyActiveValidOverride(t *testing.T) {
+func TestMeetingQuotaAuthorizationUsesDefaultPolicy(t *testing.T) {
 	policy, err := NewMeetingQuotaPolicy(validMeetingQuotaConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
-	monthly, meeting, concurrent := int64(3_600), int64(1_800), int32(2)
-	effective, err := policy.WithOverride(&MeetingQuotaOverride{
-		Status: MeetingQuotaOverrideStatusActive, MonthlyAudioSeconds: &monthly,
-		MaxMeetingAudioSeconds: &meeting, MaxConcurrentMeetings: &concurrent,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if effective.MonthlyAudioSeconds != monthly || effective.MaxMeetingAudioSeconds != meeting || effective.MaxConcurrentMeetings != concurrent {
-		t.Fatalf("effective policy = %#v", effective)
-	}
-	invalid := int64(0)
-	if _, err := policy.WithOverride(&MeetingQuotaOverride{
-		Status: MeetingQuotaOverrideStatusActive, MonthlyAudioSeconds: &invalid,
-	}); err == nil {
-		t.Fatal("WithOverride() expected invalid override error")
-	}
-}
-
-func TestMeetingQuotaReserveUsesOverrideAndSkipsRateLimitForExistingMeeting(t *testing.T) {
-	policy, err := NewMeetingQuotaPolicy(validMeetingQuotaConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	monthly := int64(60)
-	repo := &quotaFakeRepo{defaultPolicy: policy, override: &MeetingQuotaOverride{
-		Status: MeetingQuotaOverrideStatusActive, MonthlyAudioSeconds: &monthly,
-	}}
+	repo := &quotaFakeRepo{defaultPolicy: policy}
 	limiter := &quotaFakeRateLimiter{decision: MeetingCreateRateDecision{Allowed: true}}
 	uc, err := NewMeetingQuotaUsecase(repo, repo, limiter)
 	if err != nil {
@@ -200,19 +139,12 @@ func TestMeetingQuotaReserveUsesOverrideAndSkipsRateLimitForExistingMeeting(t *t
 	}
 	userID, meetingID := uuid.NewString(), uuid.NewString()
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
-	first, err := uc.Reserve(context.Background(), userID, meetingID, now)
+	first, err := uc.AuthorizeReservation(context.Background(), userID, meetingID, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Reservation.GrantedSeconds != monthly || repo.reserveInput.Policy.MonthlyAudioSeconds != monthly {
-		t.Fatalf("Reserve() = %#v, input = %#v", first, repo.reserveInput)
-	}
-	second, err := uc.Reserve(context.Background(), userID, meetingID, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !second.Existing || limiter.calls != 1 {
-		t.Fatalf("duplicate result = %#v, rate limiter calls = %d", second, limiter.calls)
+	if first.Policy != policy || limiter.calls != 1 {
+		t.Fatalf("AuthorizeReservation() = %#v, rate limiter calls = %d", first, limiter.calls)
 	}
 }
 
@@ -230,7 +162,7 @@ func TestMeetingQuotaReserveEnforcesRateAndRedisFailurePolicy(t *testing.T) {
 		if newErr != nil {
 			t.Fatal(newErr)
 		}
-		_, reserveErr := uc.Reserve(context.Background(), userID, meetingID, time.Now())
+		_, reserveErr := uc.AuthorizeReservation(context.Background(), userID, meetingID, time.Now())
 		if kratoserrors.Reason(reserveErr) != "MEETING_RATE_LIMITED" {
 			t.Fatalf("Reserve() error = %v", reserveErr)
 		}
@@ -245,7 +177,7 @@ func TestMeetingQuotaReserveEnforcesRateAndRedisFailurePolicy(t *testing.T) {
 		if newErr != nil {
 			t.Fatal(newErr)
 		}
-		_, reserveErr := uc.Reserve(context.Background(), userID, meetingID, time.Now())
+		_, reserveErr := uc.AuthorizeReservation(context.Background(), userID, meetingID, time.Now())
 		if kratoserrors.Reason(reserveErr) != "MEETING_RATE_LIMIT_UNAVAILABLE" {
 			t.Fatalf("Reserve() error = %v", reserveErr)
 		}
@@ -258,8 +190,8 @@ func TestMeetingQuotaReserveEnforcesRateAndRedisFailurePolicy(t *testing.T) {
 		if newErr != nil {
 			t.Fatal(newErr)
 		}
-		if _, reserveErr := uc.Reserve(context.Background(), userID, meetingID, time.Now()); reserveErr != nil {
-			t.Fatalf("Reserve() error = %v", reserveErr)
+		if _, reserveErr := uc.AuthorizeReservation(context.Background(), userID, meetingID, time.Now()); reserveErr != nil {
+			t.Fatalf("AuthorizeReservation() error = %v", reserveErr)
 		}
 	})
 }
@@ -335,7 +267,6 @@ func TestMeetingQuotaClosedSetsRejectUnknownValues(t *testing.T) {
 		name  string
 		parse func(string) error
 	}{
-		{name: "override status", parse: func(raw string) error { _, err := ParseMeetingQuotaOverrideStatus(raw); return err }},
 		{name: "reservation status", parse: func(raw string) error { _, err := ParseMeetingUsageReservationStatus(raw); return err }},
 		{name: "settlement reason", parse: func(raw string) error { _, err := ParseMeetingUsageSettlementReason(raw); return err }},
 		{name: "usage kind", parse: func(raw string) error { _, err := ParseMeetingUsageKind(raw); return err }},

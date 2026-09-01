@@ -177,20 +177,12 @@ func (r *MeetingRepo) GetTranscriptSnapshot(ctx context.Context, meetingID strin
 	if err != nil {
 		return nil, quotaDataError(err)
 	}
-	var rows []model.MeetingTranscriptSegment
-	if err := r.db.WithContext(ctx).Where("meeting_id = ?", meetingID).Order("sequence_no ASC").Limit(limit + 1).Find(&rows).Error; err != nil {
+	segments, err := decodeTranscriptSegments(meetingID, meetingRow.TranscriptSegments)
+	if err != nil {
 		return nil, quotaDataError(err)
 	}
-	if len(rows) > limit {
+	if len(segments) > limit {
 		return nil, biz.ErrMeetingStateConflict
-	}
-	segments := make([]*biz.MeetingTranscriptSegment, 0, len(rows))
-	for index := range rows {
-		segment, err := toBizMeetingTranscriptSegment(&rows[index])
-		if err != nil {
-			return nil, quotaDataError(err)
-		}
-		segments = append(segments, segment)
 	}
 	return &biz.MeetingTranscriptSnapshot{
 		MeetingID: meetingID, Language: language, TranscriptRevision: revision, Segments: segments,

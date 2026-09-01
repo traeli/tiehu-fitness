@@ -86,13 +86,13 @@ internal/platform/database/postgres.go
 | `workout_sets` | 实际完成的组数、次数、重量和 RPE |
 | `check_ins` | 每日训练打卡 |
 | `meeting_quota_policies` | 实时生效的默认会议额度策略单例行 |
-| `user_meeting_quota_overrides` | 用户级会议额度覆盖 |
-| `meeting_usage_periods` | 用户自然月额度账本 |
-| `meeting_usage_reservations` | 会议创建时的额度预占 |
-| `meeting_usage_records` | 会议结束后的额度结算记录 |
-| `meetings` | 会议生命周期、转写状态及当前结构化会议总结 |
-| `meeting_transcript_segments` | 最终会议转写片段 |
-| `meeting_transcript_batches` | Vision 到 Core 转写批次幂等记录 |
+| `user_meeting_monthly_quotas` | 用户自然月基础、购买、已用和预占额度 |
+| `orders` | 订单；`type=meeting_quota` 时关联对应月度额度行 |
+| `meetings` | 会议生命周期、额度预占/结算、最终转写 JSONB 及当前结构化总结 |
+
+会议域当前只使用以上 4 张表。`meetings` 一行保存一场会议的额度生命周期；
+`transcript_segments` JSONB 保存有界的最终片段数组，片段 ID 与序号共同承担幂等检查。
+月度余额更新使用 `user_meeting_monthly_quotas` 行锁，避免并发超扣。
 
 微信身份使用唯一约束：
 

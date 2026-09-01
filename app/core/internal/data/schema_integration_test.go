@@ -59,9 +59,22 @@ func TestAutoMigrateSchemaCreatesCoreTablesAndSeed(t *testing.T) {
 	if db.Migrator().HasTable("meeting_summaries") {
 		t.Fatal("legacy meeting_summaries table was not compacted into meetings")
 	}
+	for _, legacyTable := range []string{
+		"user_meeting_quota_overrides", "meeting_usage_periods", "meeting_usage_reservations",
+		"meeting_usage_records", "meeting_transcript_segments", "meeting_transcript_batches",
+	} {
+		if db.Migrator().HasTable(legacyTable) {
+			t.Fatalf("legacy meeting table %q was not compacted", legacyTable)
+		}
+	}
 	for _, column := range []string{"summary_content", "summary_provider", "summary_failure_reason"} {
 		if !db.Migrator().HasColumn(&model.Meeting{}, column) {
 			t.Fatalf("meetings is missing compact summary column %q", column)
+		}
+	}
+	for _, column := range []string{"quota_period_start", "quota_status", "actual_audio_seconds", "transcript_segments"} {
+		if !db.Migrator().HasColumn(&model.Meeting{}, column) {
+			t.Fatalf("meetings is missing compact meeting column %q", column)
 		}
 	}
 	var policy model.MeetingQuotaPolicy

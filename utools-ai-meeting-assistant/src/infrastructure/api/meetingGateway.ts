@@ -321,7 +321,7 @@ function parseMeetingQuotaResponse(value: unknown): MeetingQuota {
     "quota.maxConcurrentMeetings",
   );
   const activeMeetings = parseProtoInteger(
-    readField(quota, "activeMeetings", "active_meetings"),
+    readField(quota, "activeMeetings", "active_meetings") ?? 0,
     "quota.activeMeetings",
   );
   if (maxMeetingSeconds <= 0 || maxConcurrentMeetings <= 0 || activeMeetings < 0) {

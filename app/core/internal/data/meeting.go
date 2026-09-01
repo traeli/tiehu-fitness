@@ -2,12 +2,13 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	stderrors "errors"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/tiehu-ai/tiehu-fitness/app/core/internal/biz"
 	"github.com/tiehu-ai/tiehu-fitness/app/core/internal/data/model"
 	"gorm.io/gorm"
@@ -45,45 +46,35 @@ func (r *MeetingRepo) CreateWithQuota(ctx context.Context, input biz.MeetingCrea
 	}
 	var output *biz.MeetingCreatePersistenceResult
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		candidate := model.Meeting{
-			ID: input.MeetingID, UserID: input.UserID, ReservationID: quotaInput.ReservationID,
-			CreateIdempotencyKey: input.IdempotencyKey, CreateRequestFingerprint: input.RequestFingerprint,
-			Status: biz.MeetingStatusRecording.String(), TranscriptionStatus: biz.MeetingTranscriptionStatusPending.String(),
-			Language: input.Language.String(), RetainAudio: input.RetainAudio,
-			SummaryStatus:       biz.MeetingSummaryStatusNotStarted.String(),
-			GrantedAudioSeconds: quotaInput.Policy.MaxMeetingAudioSeconds,
-			StartedAt:           input.Now, CreatedAt: input.Now, UpdatedAt: input.Now,
+		// Serialize a user's identical create key before checking for an existing
+		// row. This preserves idempotency even when two requests arrive before
+		// either transaction has inserted the meeting.
+		if err := tx.WithContext(ctx).Exec(
+			"SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", input.UserID+":"+input.IdempotencyKey,
+		).Error; err != nil {
+			return err
 		}
-		insert := tx.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "user_id"}, {Name: "create_idempotency_key"}}, DoNothing: true,
-		}).Create(&candidate)
-		if insert.Error != nil {
-			return insert.Error
-		}
-		if insert.RowsAffected == 0 {
-			var existing model.Meeting
-			if err := tx.WithContext(ctx).
-				Where("user_id = ? AND create_idempotency_key = ? AND deleted_at IS NULL", input.UserID, input.IdempotencyKey).
-				Take(&existing).Error; err != nil {
-				return err
-			}
+		var existing model.Meeting
+		err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ? AND create_idempotency_key = ? AND deleted_at IS NULL", input.UserID, input.IdempotencyKey).
+			Take(&existing).Error
+		if err == nil {
 			if existing.CreateRequestFingerprint != input.RequestFingerprint {
 				return biz.ErrMeetingIdempotencyConflict
-			}
-			var reservationRow model.MeetingUsageReservation
-			if err := tx.WithContext(ctx).Where("reservation_id = ?", existing.ReservationID).Take(&reservationRow).Error; err != nil {
-				return err
 			}
 			meeting, err := toBizMeeting(&existing)
 			if err != nil {
 				return err
 			}
-			reservation, err := toBizMeetingUsageReservation(&reservationRow)
+			reservation, err := meetingToQuotaReservation(&existing)
 			if err != nil {
 				return err
 			}
 			output = &biz.MeetingCreatePersistenceResult{Meeting: meeting, Reservation: reservation, Existing: true}
 			return nil
+		}
+		if !stderrors.Is(err, gorm.ErrRecordNotFound) {
+			return err
 		}
 
 		quotaResult, err := r.quota.reserveWithTx(ctx, tx, quotaInput)
@@ -93,27 +84,33 @@ func (r *MeetingRepo) CreateWithQuota(ctx context.Context, input biz.MeetingCrea
 		if quotaResult == nil || quotaResult.Reservation == nil || quotaResult.Existing {
 			return fmt.Errorf("new meeting quota reservation is invalid")
 		}
-		candidate.GrantedAudioSeconds = quotaResult.Reservation.GrantedSeconds
-		update := tx.WithContext(ctx).Model(&candidate).Updates(map[string]any{
-			"granted_audio_seconds": candidate.GrantedAudioSeconds,
-			"updated_at":            input.Now,
-		})
-		if update.Error != nil {
-			return update.Error
+		reservation := quotaResult.Reservation
+		candidate := model.Meeting{
+			ID: input.MeetingID, UserID: input.UserID, ReservationID: reservation.ID,
+			CreateIdempotencyKey: input.IdempotencyKey, CreateRequestFingerprint: input.RequestFingerprint,
+			Status: biz.MeetingStatusRecording.String(), TranscriptionStatus: biz.MeetingTranscriptionStatusPending.String(),
+			Language: input.Language.String(), RetainAudio: input.RetainAudio,
+			GrantedAudioSeconds: reservation.GrantedSeconds,
+			QuotaPeriodStart:    reservation.Period.Start, QuotaPeriodEnd: reservation.Period.End,
+			QuotaStatus: reservation.Status.String(), QuotaExpiresAt: reservation.ExpiresAt,
+			TranscriptSegments: json.RawMessage("[]"), SummaryStatus: biz.MeetingSummaryStatusNotStarted.String(),
+			SummaryContent: json.RawMessage("{}"), StartedAt: input.Now, CreatedAt: input.Now, UpdatedAt: input.Now,
 		}
-		if update.RowsAffected != 1 {
-			return fmt.Errorf("new meeting disappeared during creation")
+		if err := tx.WithContext(ctx).Create(&candidate).Error; err != nil {
+			if stderrors.Is(err, gorm.ErrDuplicatedKey) {
+				return biz.ErrMeetingIdempotencyConflict
+			}
+			return err
 		}
 		meeting, err := toBizMeeting(&candidate)
 		if err != nil {
 			return err
 		}
-		output = &biz.MeetingCreatePersistenceResult{Meeting: meeting, Reservation: quotaResult.Reservation}
+		output = &biz.MeetingCreatePersistenceResult{Meeting: meeting, Reservation: reservation}
 		return nil
 	})
 	if err != nil {
-		if stderrors.Is(err, biz.ErrMeetingIdempotencyConflict) || stderrors.Is(err, biz.ErrMeetingQuotaExceeded) ||
-			stderrors.Is(err, biz.ErrMeetingConcurrentLimit) || stderrors.Is(err, biz.ErrMeetingReservationConflict) {
+		if stderrors.Is(err, biz.ErrMeetingIdempotencyConflict) || stderrors.Is(err, biz.ErrMeetingQuotaExceeded) {
 			return nil, err
 		}
 		return nil, quotaDataError(err)
@@ -202,16 +199,12 @@ func (r *MeetingRepo) FailPreparationAndRelease(ctx context.Context, userID, mee
 		if !status.CanTransitionTo(biz.MeetingStatusFailed) {
 			return biz.ErrMeetingStateConflict
 		}
-		var reservation model.MeetingUsageReservation
-		if err := tx.WithContext(ctx).Where("reservation_id = ?", meetingRow.ReservationID).Take(&reservation).Error; err != nil {
-			return err
-		}
 		if _, err := r.quota.finalizeWithTx(ctx, tx, biz.MeetingQuotaFinalizeInput{
 			MeetingUsageFinalizeCommand: biz.MeetingUsageFinalizeCommand{
 				ReservationID: meetingRow.ReservationID, MeetingID: meetingRow.ID,
 				Reason: biz.MeetingUsageSettlementReasonPreparationFailed, FinalizedAt: now,
 			}, Kind: biz.MeetingUsageKindASRAudio,
-		}, &reservation); err != nil {
+		}, meetingRow); err != nil {
 			return err
 		}
 		updates := map[string]any{
@@ -315,6 +308,7 @@ func (r *MeetingRepo) AppendFinalTranscriptSegments(ctx context.Context, meeting
 			return 0, fmt.Errorf("transcript segment is required")
 		}
 	}
+	_ = batchID // Segment identity and sequence provide the durable idempotency boundary.
 	lastSequence := int64(0)
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var meetingRow model.Meeting
@@ -329,73 +323,40 @@ func (r *MeetingRepo) AppendFinalTranscriptSegments(ctx context.Context, meeting
 		if meetingRow.TranscriptionSessionID == nil || *meetingRow.TranscriptionSessionID != sessionID {
 			return biz.ErrMeetingSessionMismatch
 		}
-		batch := model.MeetingTranscriptBatch{MeetingID: meetingID, BatchID: batchID, LastSequenceNo: segments[len(segments)-1].SequenceNo}
-		insertBatch := tx.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "meeting_id"}, {Name: "batch_id"}}, DoNothing: true,
-		}).Create(&batch)
-		if insertBatch.Error != nil {
-			return insertBatch.Error
+		stored, err := decodeTranscriptSegments(meetingRow.ID, meetingRow.TranscriptSegments)
+		if err != nil {
+			return err
 		}
-		if insertBatch.RowsAffected == 0 {
-			var existingBatch model.MeetingTranscriptBatch
-			if err := tx.WithContext(ctx).Where("meeting_id = ? AND batch_id = ?", meetingID, batchID).Take(&existingBatch).Error; err != nil {
-				return err
-			}
-			if existingBatch.LastSequenceNo != segments[len(segments)-1].SequenceNo {
-				return biz.ErrTranscriptSegmentConflict
-			}
-			for _, segment := range segments {
-				var existing model.MeetingTranscriptSegment
-				if err := tx.WithContext(ctx).
-					Where("meeting_id = ? AND sequence_no = ? AND segment_id = ?", meetingID, segment.SequenceNo, segment.ID).
-					Take(&existing).Error; err != nil {
-					if stderrors.Is(err, gorm.ErrRecordNotFound) {
-						return biz.ErrTranscriptSegmentConflict
-					}
-					return err
-				}
-				if !sameTranscriptSegment(&existing, segment) {
-					return biz.ErrTranscriptSegmentConflict
-				}
-			}
-			lastSequence = existingBatch.LastSequenceNo
-			if meetingRow.TranscriptRevision > lastSequence {
-				lastSequence = meetingRow.TranscriptRevision
-			}
-			return nil
+		bySequence := make(map[int64]*biz.MeetingTranscriptSegment, len(stored))
+		byID := make(map[string]*biz.MeetingTranscriptSegment, len(stored))
+		for _, segment := range stored {
+			bySequence[segment.SequenceNo] = segment
+			byID[segment.ID] = segment
 		}
-
 		for _, segment := range segments {
-			var existing model.MeetingTranscriptSegment
-			err := tx.WithContext(ctx).
-				Where("meeting_id = ? AND (sequence_no = ? OR segment_id = ?)", meetingID, segment.SequenceNo, segment.ID).
-				Take(&existing).Error
-			if err == nil {
-				if !sameTranscriptSegment(&existing, segment) {
+			existingBySequence, sequenceExists := bySequence[segment.SequenceNo]
+			existingByID, idExists := byID[segment.ID]
+			if sequenceExists || idExists {
+				if !sequenceExists || !idExists || existingBySequence != existingByID || !sameTranscriptSegment(existingBySequence, segment) {
 					return biz.ErrTranscriptSegmentConflict
 				}
 				continue
 			}
-			if !stderrors.Is(err, gorm.ErrRecordNotFound) {
-				return err
-			}
-			row, err := toMeetingTranscriptSegmentModel(segment)
-			if err != nil {
-				return err
-			}
-			if err := tx.WithContext(ctx).Create(row).Error; err != nil {
-				if stderrors.Is(err, gorm.ErrDuplicatedKey) {
-					return biz.ErrTranscriptSegmentConflict
-				}
-				return err
-			}
+			stored = append(stored, segment)
+			bySequence[segment.SequenceNo] = segment
+			byID[segment.ID] = segment
 		}
-		lastSequence = segments[len(segments)-1].SequenceNo
-		if meetingRow.TranscriptRevision > lastSequence {
-			lastSequence = meetingRow.TranscriptRevision
+		sort.Slice(stored, func(left, right int) bool { return stored[left].SequenceNo < stored[right].SequenceNo })
+		lastSequence = meetingRow.TranscriptRevision
+		if candidate := stored[len(stored)-1].SequenceNo; candidate > lastSequence {
+			lastSequence = candidate
+		}
+		encoded, err := encodeTranscriptSegments(stored)
+		if err != nil {
+			return err
 		}
 		if err := tx.WithContext(ctx).Model(&meetingRow).
-			Updates(map[string]any{"transcript_revision": lastSequence, "updated_at": time.Now().UTC()}).Error; err != nil {
+			Updates(map[string]any{"transcript_segments": encoded, "transcript_revision": lastSequence, "updated_at": time.Now().UTC()}).Error; err != nil {
 			return err
 		}
 		return nil
@@ -475,13 +436,6 @@ func (r *MeetingRepo) FinalizeTranscription(ctx context.Context, input biz.Final
 			}
 		}
 
-		var reservation model.MeetingUsageReservation
-		if err := tx.WithContext(ctx).Where("reservation_id = ? AND meeting_id = ?", input.ReservationID, input.MeetingID).Take(&reservation).Error; err != nil {
-			if stderrors.Is(err, gorm.ErrRecordNotFound) {
-				return biz.ErrMeetingQuotaReservationNotFound
-			}
-			return err
-		}
 		usage, err := r.quota.finalizeWithTx(ctx, tx, biz.MeetingQuotaFinalizeInput{
 			MeetingUsageFinalizeCommand: biz.MeetingUsageFinalizeCommand{
 				ReservationID: input.ReservationID, MeetingID: input.MeetingID,
@@ -489,7 +443,7 @@ func (r *MeetingRepo) FinalizeTranscription(ctx context.Context, input biz.Final
 				Reason: input.SettlementReason, FinalizedAt: input.FinalizedAt,
 			},
 			Kind: biz.MeetingUsageKindASRAudio,
-		}, &reservation)
+		}, &meetingRow)
 		if err != nil {
 			return err
 		}
@@ -535,34 +489,30 @@ func (r *MeetingRepo) ListTranscriptSegments(ctx context.Context, input biz.List
 	if input.PageSize <= 0 || input.PageSize > 200 {
 		return nil, false, fmt.Errorf("transcript page size is out of range")
 	}
-	var meetingCount int64
-	if err := r.db.WithContext(ctx).Model(&model.Meeting{}).
-		Where("id = ? AND user_id = ? AND deleted_at IS NULL", input.MeetingID, input.UserID).
-		Count(&meetingCount).Error; err != nil {
-		return nil, false, quotaDataError(err)
-	}
-	if meetingCount == 0 {
+	var row model.Meeting
+	err := r.db.WithContext(ctx).Where("id = ? AND user_id = ? AND deleted_at IS NULL", input.MeetingID, input.UserID).Take(&row).Error
+	if stderrors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, false, biz.ErrMeetingNotFound
 	}
-	limit := int(input.PageSize) + 1
-	var rows []model.MeetingTranscriptSegment
-	err := r.db.WithContext(ctx).
-		Where("meeting_id = ? AND sequence_no > ?", input.MeetingID, input.AfterSequence).
-		Order("sequence_no ASC").Limit(limit).Find(&rows).Error
 	if err != nil {
 		return nil, false, quotaDataError(err)
 	}
-	hasMore := len(rows) > int(input.PageSize)
-	if hasMore {
-		rows = rows[:input.PageSize]
+	stored, err := decodeTranscriptSegments(row.ID, row.TranscriptSegments)
+	if err != nil {
+		return nil, false, quotaDataError(err)
 	}
-	segments := make([]*biz.MeetingTranscriptSegment, 0, len(rows))
-	for index := range rows {
-		segment, mapErr := toBizMeetingTranscriptSegment(&rows[index])
-		if mapErr != nil {
-			return nil, false, quotaDataError(mapErr)
+	segments := make([]*biz.MeetingTranscriptSegment, 0, input.PageSize+1)
+	for _, segment := range stored {
+		if segment.SequenceNo > input.AfterSequence {
+			segments = append(segments, segment)
+			if len(segments) > int(input.PageSize) {
+				break
+			}
 		}
-		segments = append(segments, segment)
+	}
+	hasMore := len(segments) > int(input.PageSize)
+	if hasMore {
+		segments = segments[:input.PageSize]
 	}
 	return segments, hasMore, nil
 }
@@ -615,18 +565,59 @@ func toBizMeeting(row *model.Meeting) (*biz.Meeting, error) {
 	return meeting, nil
 }
 
-func toMeetingTranscriptSegmentModel(segment *biz.MeetingTranscriptSegment) (*model.MeetingTranscriptSegment, error) {
-	startMS := segment.StartOffset / time.Millisecond
-	endMS := segment.EndOffset / time.Millisecond
-	return &model.MeetingTranscriptSegment{
-		ID: uuid.NewString(), MeetingID: segment.MeetingID, SegmentID: segment.ID,
-		SequenceNo: segment.SequenceNo, StartOffsetMS: int64(startMS), EndOffsetMS: int64(endMS),
-		SpeakerLabel: segment.SpeakerLabel, Content: segment.Content, Language: segment.Language.String(),
-		Confidence: segment.Confidence, CreatedAt: segment.CreatedAt,
-	}, nil
+type persistedTranscriptSegment struct {
+	ID            string    `json:"id"`
+	SequenceNo    int64     `json:"sequence_no"`
+	StartOffsetMS int64     `json:"start_offset_ms"`
+	EndOffsetMS   int64     `json:"end_offset_ms"`
+	SpeakerLabel  string    `json:"speaker_label"`
+	Content       string    `json:"content"`
+	Language      string    `json:"language"`
+	Confidence    *float32  `json:"confidence,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
-func toBizMeetingTranscriptSegment(row *model.MeetingTranscriptSegment) (*biz.MeetingTranscriptSegment, error) {
+func encodeTranscriptSegments(segments []*biz.MeetingTranscriptSegment) (json.RawMessage, error) {
+	rows := make([]persistedTranscriptSegment, 0, len(segments))
+	for _, segment := range segments {
+		if segment == nil {
+			return nil, fmt.Errorf("transcript segment is nil")
+		}
+		rows = append(rows, persistedTranscriptSegment{
+			ID: segment.ID, SequenceNo: segment.SequenceNo,
+			StartOffsetMS: int64(segment.StartOffset / time.Millisecond), EndOffsetMS: int64(segment.EndOffset / time.Millisecond),
+			SpeakerLabel: segment.SpeakerLabel, Content: segment.Content, Language: segment.Language.String(),
+			Confidence: segment.Confidence, CreatedAt: segment.CreatedAt,
+		})
+	}
+	encoded, err := json.Marshal(rows)
+	if err != nil {
+		return nil, fmt.Errorf("encode meeting transcript segments: %w", err)
+	}
+	return encoded, nil
+}
+
+func decodeTranscriptSegments(meetingID string, raw json.RawMessage) ([]*biz.MeetingTranscriptSegment, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return []*biz.MeetingTranscriptSegment{}, nil
+	}
+	var rows []persistedTranscriptSegment
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, fmt.Errorf("decode meeting transcript segments: %w", err)
+	}
+	segments := make([]*biz.MeetingTranscriptSegment, 0, len(rows))
+	for index := range rows {
+		segment, err := persistedTranscriptSegmentToBiz(meetingID, &rows[index])
+		if err != nil {
+			return nil, err
+		}
+		segments = append(segments, segment)
+	}
+	sort.Slice(segments, func(left, right int) bool { return segments[left].SequenceNo < segments[right].SequenceNo })
+	return segments, nil
+}
+
+func persistedTranscriptSegmentToBiz(meetingID string, row *persistedTranscriptSegment) (*biz.MeetingTranscriptSegment, error) {
 	if row == nil || row.StartOffsetMS < 0 || row.EndOffsetMS < row.StartOffsetMS ||
 		row.StartOffsetMS > math.MaxInt64/int64(time.Millisecond) || row.EndOffsetMS > math.MaxInt64/int64(time.Millisecond) {
 		return nil, fmt.Errorf("stored transcript segment offsets are invalid")
@@ -636,7 +627,7 @@ func toBizMeetingTranscriptSegment(row *model.MeetingTranscriptSegment) (*biz.Me
 		return nil, err
 	}
 	return &biz.MeetingTranscriptSegment{
-		ID: row.SegmentID, MeetingID: row.MeetingID, SequenceNo: row.SequenceNo,
+		ID: row.ID, MeetingID: meetingID, SequenceNo: row.SequenceNo,
 		StartOffset:  time.Duration(row.StartOffsetMS) * time.Millisecond,
 		EndOffset:    time.Duration(row.EndOffsetMS) * time.Millisecond,
 		SpeakerLabel: row.SpeakerLabel, Content: row.Content, Language: language,
@@ -644,18 +635,17 @@ func toBizMeetingTranscriptSegment(row *model.MeetingTranscriptSegment) (*biz.Me
 	}, nil
 }
 
-func sameTranscriptSegment(row *model.MeetingTranscriptSegment, segment *biz.MeetingTranscriptSegment) bool {
-	if row.SegmentID != segment.ID || row.SequenceNo != segment.SequenceNo ||
-		row.StartOffsetMS != int64(segment.StartOffset/time.Millisecond) ||
-		row.EndOffsetMS != int64(segment.EndOffset/time.Millisecond) ||
-		row.SpeakerLabel != segment.SpeakerLabel || row.Content != segment.Content ||
-		row.Language != segment.Language.String() || !row.CreatedAt.Equal(segment.CreatedAt) {
+func sameTranscriptSegment(stored, incoming *biz.MeetingTranscriptSegment) bool {
+	if stored == nil || incoming == nil || stored.ID != incoming.ID || stored.SequenceNo != incoming.SequenceNo ||
+		stored.StartOffset != incoming.StartOffset || stored.EndOffset != incoming.EndOffset ||
+		stored.SpeakerLabel != incoming.SpeakerLabel || stored.Content != incoming.Content ||
+		stored.Language != incoming.Language || !stored.CreatedAt.Equal(incoming.CreatedAt) {
 		return false
 	}
-	if row.Confidence == nil || segment.Confidence == nil {
-		return row.Confidence == nil && segment.Confidence == nil
+	if stored.Confidence == nil || incoming.Confidence == nil {
+		return stored.Confidence == nil && incoming.Confidence == nil
 	}
-	return *row.Confidence == *segment.Confidence
+	return *stored.Confidence == *incoming.Confidence
 }
 
 func mapMeetingDataError(err error) error {

@@ -128,7 +128,7 @@ Authorization: Bearer <access-token>
 V1 周期按 `Asia/Shanghai` 自然月计算，时间字段以 UTC RFC 3339 返回。
 
 用户首次查询额度或创建会议时，core 将当时生效的基础策略快照到
-`meeting_usage_periods.base_quota_seconds`。同月后续策略变更不追溯修改该快照；
+`user_meeting_monthly_quotas.base_quota_seconds`。同月后续策略变更不追溯修改该快照；
 已支付的 `orders.type = meeting_quota` 订单累计到 `purchasedLimit`，并随本周期结束清零。
 `limit` 为兼容旧客户端保留，值与 `totalLimit` 相同。
 

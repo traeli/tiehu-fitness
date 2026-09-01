@@ -73,6 +73,32 @@ describe("HttpMeetingGateway", () => {
     });
   });
 
+  it("defaults an omitted proto3 active meeting counter to zero", async () => {
+    const api = new StubApiClient({
+      quota: {
+        period_start: { seconds: "1788192000" },
+        period_end: { seconds: "1790784000" },
+        limit: { seconds: "7200" },
+        consumed: {},
+        reserved: {},
+        remaining: { seconds: "7200" },
+        max_meeting_duration: { seconds: "14400" },
+        max_concurrent_meetings: 1,
+        base_limit: { seconds: "7200" },
+        purchased_limit: {},
+        total_limit: { seconds: "7200" },
+      },
+    });
+
+    await expect(new HttpMeetingGateway(api).getMeetingQuota()).resolves.toMatchObject({
+      activeMeetings: 0,
+      consumedSeconds: 0,
+      reservedSeconds: 0,
+      purchasedLimitSeconds: 0,
+      remainingSeconds: 7_200,
+    });
+  });
+
   it("uses Proto JSON and maps the backend PCM contract", async () => {
     const api = new StubApiClient({
       meeting: {

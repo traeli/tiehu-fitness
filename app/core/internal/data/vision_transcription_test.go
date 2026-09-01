@@ -70,12 +70,22 @@ func TestVisionTranscriptionGatewayMapsTypedRequestAndResponse(t *testing.T) {
 		t.Fatalf("mapped session = %#v", session)
 	}
 	if err := gateway.CancelTranscription(context.Background(), biz.CancelMeetingTranscriptionInput{
-		SessionID: "session-id", MeetingID: "meeting-id", IdempotencyKey: "compensate:meeting-id",
+		SessionID: "session-id", MeetingID: "meeting-id",
+		Reason: biz.MeetingTranscriptionCancelReasonPrepareCompensation, IdempotencyKey: "compensate:meeting-id",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if client.cancelRequest == nil || client.cancelRequest.GetReason() != visionv1.TranscriptionCancelReason_TRANSCRIPTION_CANCEL_REASON_PREPARE_COMPENSATION {
 		t.Fatalf("cancel request = %#v", client.cancelRequest)
+	}
+	if err := gateway.CancelTranscription(context.Background(), biz.CancelMeetingTranscriptionInput{
+		SessionID: "session-id", MeetingID: "meeting-id",
+		Reason: biz.MeetingTranscriptionCancelReasonUserCancelled, IdempotencyKey: "user-stop:meeting-id",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if client.cancelRequest.GetReason() != visionv1.TranscriptionCancelReason_TRANSCRIPTION_CANCEL_REASON_USER_CANCELLED {
+		t.Fatalf("user cancel request = %#v", client.cancelRequest)
 	}
 }
 

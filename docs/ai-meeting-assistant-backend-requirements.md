@@ -338,24 +338,18 @@ Core 和 Vision 启动时分别对本服务显式 Model 列表运行 `AutoMigrat
   - `id`, `user_id`, `title`, `language`, `status`
   - `retain_audio`, `audio_asset_id`
   - `started_at`, `stopped_at`, `created_at`, `updated_at`, `deleted_at`
-  - `transcript_revision`, `summary_version`, `summary_status`
+  - `transcript_revision`, `transcript_segments`（JSONB）
+  - 额度周期、grant、reported、actual、Provider 用量、额度状态和结算原因
+  - `summary_version`, `summary_status`
   - 当前总结的 `summary_content`（JSONB）、Provider、模型、Prompt 版本、Token 与失败原因
-- `meeting_transcript_segments`
-  - `id`, `meeting_id`, `sequence_no`, offsets, `speaker_label`, `content`, `language`, `confidence`
-  - 唯一约束 `(meeting_id, sequence_no)`
 - Core 当前阶段只在 `meetings` 保存最新结构化总结，不单独维护总结历史表。
 - Vision 的 `meeting_summary_jobs` 保留异步执行记录，并保存最近一次不含认证头的 LLM 请求体、原始响应体、HTTP 状态和耗时，便于开发排查。
 - `meeting_exports`
   - `id`, `meeting_id`, `format`, `status`, `asset_id`, timestamps
-- `user_meeting_quota_overrides`
-  - `user_id` 唯一，可选覆盖月度秒数、单场秒数和并发数
-  - `status` 是 `active`/`disabled` 闭集，不存在或 disabled 时使用服务端默认策略
-- `meeting_usage_periods`
-  - `(user_id, period_start)` 唯一，保存自然月 `consumed_seconds` 和 `reserved_seconds`
-- `meeting_usage_reservations`
-  - `meeting_id` 唯一，保存 grant、单调累计 reported、终态、过期和结算时间
-- `meeting_usage_records`
-  - `(meeting_id, usage_kind)` 唯一，保存最终计费时长、Provider 审计用量和结算原因
+- `user_meeting_monthly_quotas`
+  - `(user_id, period_start)` 唯一，保存基础、购买、已用和预占秒数
+- `orders`
+  - 订单通过 `monthly_quota_id` 关联月度额度；`type=meeting_quota`
 - `outbox_events`
   - 跨服务任务提交与删除清理事件
 
@@ -447,12 +441,12 @@ Core 和 Vision 启动时分别对本服务显式 Model 列表运行 `AutoMigrat
 
 ### 13.3 B-350 单用户额度实现基线
 
-- 默认策略由 `meeting_quota_policies` 当前行转换为 typed policy，用户 active override 只替换明确存在的月度、单场和并发字段；数据库和 biz 同时校验范围。策略变更只影响后续授权，已创建会议保留原 reservation grant。
+- 默认策略由 `meeting_quota_policies` 当前行转换为 typed policy。策略变更只影响后续新自然月快照，已创建会议保留原 grant。
 - 周期固定为 `Asia/Shanghai` 自然月，边界以 UTC `TIMESTAMPTZ` 保存；非零不足一秒的已接受音频向上取整。
-- reservation 通过 `meeting_usage_periods` 行锁串行化同一用户的计算，grant 取单场上限与剩余额度的较小值；并发请求不能透支额度。
+- 创建会议通过 `user_meeting_monthly_quotas` 行锁串行化同一用户的计算，grant 取当前全部剩余额度并写入 `meetings`；不再用独立并发会议规则拦截，额度为零时拒绝，连接达到 grant 后关闭。
 - progress 只接受单调增加的累计用量，回退值不覆盖，超过 grant 的值截断到 grant。
 - 完成、额度耗尽、取消、失败、过期和 Provider 准备失败走同一个幂等 finalize；迟到 Provider 用量只更新成本审计字段，不再次增加用户 consumed。
-- 提供最多 1,000 条一批的跨周期过期 reservation 扫描入口；并发扫描仍通过幂等 finalize 收敛，B-400 负责用有 owner、取消和恢复边界的后台任务调度。
+- 提供最多 1,000 条一批的跨周期过期会议额度扫描入口；并发扫描仍通过幂等 finalize 收敛。
 - Redis 固定窗口 key 为 `core:meeting_create_rate:v1:<user_id>:<window_start>`，原子计数并设置 TTL。Redis 故障按配置拒绝，或仅退化到 PostgreSQL 配额与并发检查。
 - B-350 提供可注入的 biz/data 能力。公开 `GetMeetingQuota` handler、外部幂等键到 meeting ID 的映射以及“创建会议 + 预占”同事务组合在 B-400 完成；vision 单连接硬限制在 B-700 完成。
 
