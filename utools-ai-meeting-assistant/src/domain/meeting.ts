@@ -118,9 +118,11 @@ export function formatQuotaDuration(seconds: number): string {
   if (!Number.isSafeInteger(seconds) || seconds <= 0) {
     return "0 分钟";
   }
+  if (seconds < 60) {
+    return "不足 1 分钟";
+  }
   const hours = Math.floor(seconds / 3_600);
   const minutes = Math.floor((seconds % 3_600) / 60);
-  const remainingSeconds = seconds % 60;
   const parts: string[] = [];
   if (hours > 0) {
     parts.push(`${hours} 小时`);
@@ -128,8 +130,12 @@ export function formatQuotaDuration(seconds: number): string {
   if (minutes > 0) {
     parts.push(`${minutes} 分钟`);
   }
-  if (remainingSeconds > 0) {
-    parts.push(`${remainingSeconds} 秒`);
-  }
   return parts.join(" ");
+}
+
+// The API's remaining balance excludes quota reserved by an active meeting.
+// Reservation is an internal concurrency guard, not consumed user quota, so
+// the user-facing balance includes it until the meeting is settled.
+export function getDisplayRemainingQuotaSeconds(quota: MeetingQuota): number {
+  return Math.max(0, quota.remainingSeconds + quota.reservedSeconds);
 }

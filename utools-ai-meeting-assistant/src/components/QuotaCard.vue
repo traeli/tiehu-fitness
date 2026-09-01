@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import { formatQuotaDuration, type MeetingQuota } from "@/domain/meeting";
+import {
+  formatQuotaDuration,
+  getDisplayRemainingQuotaSeconds,
+  type MeetingQuota,
+} from "@/domain/meeting";
 
 const props = defineProps<{
   quota?: MeetingQuota;
@@ -15,9 +19,13 @@ const usedPercent = computed(() => {
   if (!props.quota || props.quota.totalLimitSeconds <= 0) {
     return 0;
   }
-  const occupied = props.quota.totalLimitSeconds - props.quota.remainingSeconds;
+  const occupied = props.quota.totalLimitSeconds - getDisplayRemainingQuotaSeconds(props.quota);
   return Math.max(0, Math.min(100, Math.round((occupied / props.quota.totalLimitSeconds) * 100)));
 });
+
+const displayRemainingSeconds = computed(() =>
+  props.quota ? getDisplayRemainingQuotaSeconds(props.quota) : 0,
+);
 
 const resetText = computed(() => {
   if (!props.quota) {
@@ -36,7 +44,7 @@ const resetText = computed(() => {
     <div class="quota-heading">
       <div>
         <p class="eyebrow">本月会议额度</p>
-        <strong v-if="quota">剩余 {{ formatQuotaDuration(quota.remainingSeconds) }}</strong>
+        <strong v-if="quota">剩余 {{ formatQuotaDuration(displayRemainingSeconds) }}</strong>
         <strong v-else-if="loading">正在加载额度…</strong>
         <strong v-else>额度暂不可用</strong>
       </div>
@@ -54,7 +62,6 @@ const resetText = computed(() => {
       </div>
       <small>
         已使用 {{ formatQuotaDuration(quota.consumedSeconds) }}
-        <template v-if="quota.reservedSeconds > 0"> · 会议预占 {{ formatQuotaDuration(quota.reservedSeconds) }}</template>
         · {{ resetText }}重置
       </small>
       <p v-if="error" class="quota-error">{{ error }}，当前显示的是上次成功加载的数据。</p>

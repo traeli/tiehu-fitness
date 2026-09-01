@@ -106,6 +106,14 @@ function mapRealtimeError(
   failedAction?: FailedMeetingAction,
 ): MeetingErrorInfo {
   switch (error.code) {
+    case "TRANSCRIPTION_CONNECTION_FAILED":
+      return {
+        code: "NETWORK_UNAVAILABLE",
+        title: "实时转写连接失败",
+        message: error.message,
+        retryable: true,
+        failedAction,
+      };
     case "TRANSCRIPTION_SESSION_READY_TIMEOUT":
       return {
         code: "TRANSCRIPTION_SESSION_READY_TIMEOUT",

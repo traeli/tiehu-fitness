@@ -276,6 +276,9 @@ func TestRealtimeWebSocketOriginAndConnectionLimit(t *testing.T) {
 	if handler.originAllowed("utools://plugin/path") || handler.originAllowed("http://localhost:5173/path") {
 		t.Fatal("origin matcher accepted an origin containing a path")
 	}
+	if !handler.originAllowed("") {
+		t.Fatal("origin matcher rejected the explicitly allowed missing origin")
+	}
 	httpServer := kratoshttp.NewServer(kratoshttp.Timeout(30 * time.Second))
 	httpServer.Route("/v1/realtime").GET("/transcriptions", handler.Handle)
 	testServer := httptest.NewServer(httpServer)
@@ -642,7 +645,7 @@ func buildRealtimeTestHandler(t *testing.T, maxConnections int32, provider biz.A
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler, err := NewRealtimeWebSocketHandler(&conf.RealtimeTranscription{
-		AllowedOrigins:   []string{"http://localhost:*", "http://127.0.0.1:*", "utools://*"},
+		AllowedOrigins:   []string{"http://localhost:*", "http://127.0.0.1:*", "utools://*", missingOriginRule},
 		HandshakeTimeout: durationpb.New(time.Second), IdleTimeout: durationpb.New(5 * time.Second), WriteTimeout: durationpb.New(time.Second),
 		MaxMessageBytes: 16_384, MaxQueueChunks: 4, MaxConnections: maxConnections,
 	}, realtimeService, logger)

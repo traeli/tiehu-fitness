@@ -101,7 +101,11 @@ export class TranscriptionClient {
     });
     socket.addEventListener("message", (event) => this.#handleMessage(event.data));
     socket.addEventListener("error", () => {
-      this.#failConnection(new Error("实时转写连接发生错误"));
+      this.#failConnection(new RealtimeTranscriptionError(
+        "TRANSCRIPTION_CONNECTION_FAILED",
+        "无法建立实时转写连接，请检查网络或稍后重试。",
+        true,
+      ));
     });
     socket.addEventListener("close", (event) => this.#handleClose(event));
     return promise;

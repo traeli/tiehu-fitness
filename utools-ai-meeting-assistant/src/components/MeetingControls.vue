@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import type { MeetingQuota } from "@/domain/meeting";
+import { getDisplayRemainingQuotaSeconds, type MeetingQuota } from "@/domain/meeting";
 
 import QuotaCard from "./QuotaCard.vue";
 
@@ -37,7 +37,10 @@ const systemAudioStatus = computed(() => {
   }
   return props.systemAudioSignalSeen ? "电脑当前静音" : "尚未检测到电脑声音";
 });
-const quotaExhausted = computed(() => props.quota?.remainingSeconds === 0);
+const quotaExhausted = computed(() =>
+  props.quota ? getDisplayRemainingQuotaSeconds(props.quota) === 0 : false,
+);
+const anotherMeetingActive = computed(() => (props.quota?.activeMeetings ?? 0) > 0);
 
 defineEmits<{
   start: [];
@@ -129,10 +132,11 @@ function toMeterPercent(peak: number): number {
       v-if="canStart"
       class="primary-button"
       type="button"
-      :disabled="!transcriptionConsent || !captureSourceSelected || quotaExhausted"
+      :disabled="!transcriptionConsent || !captureSourceSelected || quotaExhausted || anotherMeetingActive"
       @click="$emit('start')"
     >
-      <template v-if="quotaExhausted">本月额度已用完</template>
+      <template v-if="anotherMeetingActive">上一场会议正在结束</template>
+      <template v-else-if="quotaExhausted">本月额度已用完</template>
       <template v-else><span class="button-icon">●</span> 开始会议</template>
     </button>
     <button v-else-if="canStop" class="stop-button" type="button" @click="$emit('stop')">

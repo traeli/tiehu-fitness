@@ -21,7 +21,10 @@ import (
 	"github.com/tiehu-ai/tiehu-fitness/internal/conf"
 )
 
-const normalWebSocketClosure = 1000
+const (
+	normalWebSocketClosure = 1000
+	missingOriginRule      = "missing"
+)
 
 type realtimeWebSocketConfig struct {
 	handshakeTimeout time.Duration
@@ -136,7 +139,10 @@ func (h *RealtimeWebSocketHandler) Handle(httpContext kratoshttp.Context) (handl
 		http.Error(response, "websocket upgrade required", http.StatusUpgradeRequired)
 		return nil
 	}
-	if !h.originAllowed(request.Header.Get("Origin")) {
+	origin := request.Header.Get("Origin")
+	if !h.originAllowed(origin) {
+		h.logger.Warn("realtime websocket origin rejected",
+			"connection_id", connectionID, "origin", origin)
 		http.Error(response, "websocket origin is not allowed", http.StatusForbidden)
 		return nil
 	}
@@ -433,6 +439,9 @@ func (h *RealtimeWebSocketHandler) writeJSON(conn *websocket.Conn, message any) 
 
 func (h *RealtimeWebSocketHandler) originAllowed(origin string) bool {
 	for _, allowed := range h.cfg.allowedOrigins {
+		if allowed == missingOriginRule && origin == "" {
+			return true
+		}
 		if origin == allowed {
 			return true
 		}
@@ -493,7 +502,7 @@ func validateRealtimeWebSocketConfig(cfg *conf.RealtimeTranscription) (realtimeW
 }
 
 func validateOriginRule(rule string) error {
-	if rule == "null" || rule == "utools://*" {
+	if rule == "null" || rule == "utools://*" || rule == missingOriginRule {
 		return nil
 	}
 	if rule == "*" || strings.TrimSpace(rule) != rule {
