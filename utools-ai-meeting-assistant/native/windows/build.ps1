@@ -18,7 +18,7 @@ if ($env:VSCMD_ARG_TGT_ARCH -and $env:VSCMD_ARG_TGT_ARCH -ne $Architecture) {
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $OutputFile = Join-Path $OutputDirectory "tiehu-system-audio.exe"
 
-& cl.exe /nologo /std:c++17 /O2 /EHsc /W4 /DUNICODE /D_UNICODE `
+& cl.exe /nologo /std:c++17 /O2 /EHsc /W4 /utf-8 /MT /DUNICODE /D_UNICODE `
   (Join-Path $ScriptDirectory "main.cpp") `
   /Fe:$OutputFile /link ole32.lib
 
