@@ -9,7 +9,8 @@ export CLANG_MODULE_CACHE_PATH="$module_cache_dir"
 
 build_target() {
   target_arch=$1
-  output_dir="$project_dir/plugin/native/darwin-$target_arch"
+  output_arch=$2
+  output_dir="$project_dir/plugin/native/darwin-$output_arch"
   mkdir -p "$output_dir"
   swiftc \
     -O \
@@ -28,5 +29,5 @@ build_target() {
   codesign --force --sign - "$output_dir/tiehu-system-audio"
 }
 
-build_target arm64
-build_target x86_64
+build_target arm64 arm64
+build_target x86_64 x64

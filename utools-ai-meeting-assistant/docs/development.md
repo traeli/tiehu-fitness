@@ -136,6 +136,12 @@ npm run build
   `win32-x64` 或 `win32-arm64` WASAPI Loopback 组件。
 - 生成物位于 `plugin/native/<platform>-<arch>`，Vite 会复制到 `dist/native`。
 
+uTools 安装后可能把发布目录封装为 ASAR，操作系统不能直接执行插件包内的原生文件。
+preload 在 uTools 环境中始终读取随包发布的对应平台文件，按内容哈希释放到
+`utools.getPath("userData")/meeting-assistant/native/<sha256>`，校验一致后再启动。不要
+改为从网络动态下载并执行辅助程序；这会扩大供应链攻击面，并使离线安装包与实际运行
+代码不一致。
+
 正式跨平台 `.upx` 必须合并各平台构建产物后再执行最终 Vite 构建。不能在 macOS
 上把未编译的 Windows C++ 源码当成 Windows 已验收。
 

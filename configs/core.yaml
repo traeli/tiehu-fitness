@@ -11,6 +11,8 @@ http_cors:
     - "http://localhost:5173"
     - "utools://*"
     - "null"
+    # Installed uTools packages load their renderer from a local file origin.
+    - "file://"
 wechat:
   app_id: ${WECHAT_APP_ID:}
   app_secret: ${WECHAT_APP_SECRET:}

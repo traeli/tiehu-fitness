@@ -53,7 +53,7 @@ func newCORSPolicy(c *conf.HTTPCORS) (*corsPolicy, error) {
 		case "utools://*":
 			policy.allowUToolsOrigins = true
 			continue
-		case "null":
+		case "null", "file://":
 			policy.exactOrigins[origin] = struct{}{}
 			continue
 		}

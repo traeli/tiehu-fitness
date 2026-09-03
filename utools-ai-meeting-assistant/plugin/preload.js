@@ -6,7 +6,12 @@ const { NativeSystemAudioProcess } = require("./native-audio-process.cjs");
 const lifecycleListeners = new Set();
 let lastEntryAction = null;
 let recordingMutationQueue = Promise.resolve();
-const nativeSystemAudio = new NativeSystemAudioProcess();
+const nativeSystemAudio = new NativeSystemAudioProcess({
+  runtimeDirectory:
+    typeof utools === "undefined"
+      ? undefined
+      : path.join(utools.getPath("userData"), "meeting-assistant", "native"),
+});
 const recordingDirectoryName = "会议助手";
 const legacyRecordingDirectoryName = "铁虎AI会议助手";
 const recordingSubdirectoryName = "录音";

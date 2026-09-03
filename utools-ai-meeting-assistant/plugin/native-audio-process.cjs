@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { createHash, randomBytes } = require("node:crypto");
 
 const {
   NativeAudioFrameDecoder,
@@ -13,6 +14,7 @@ const maxStderrBytes = 16 * 1024;
 const expectedSampleRate = 48_000;
 const expectedChannels = 1;
 const expectedFormat = "pcm_s16le";
+const maxNativeHelperBytes = 32 * 1024 * 1024;
 
 class NativeSystemAudioError extends Error {
   constructor(code, message) {
@@ -24,6 +26,7 @@ class NativeSystemAudioError extends Error {
 
 class NativeSystemAudioProcess {
   #child;
+  #runtimeDirectory;
   #state = "idle";
   #stderr = "";
   #startTimer;
@@ -33,6 +36,13 @@ class NativeSystemAudioProcess {
   #stopResolve;
   #onAudio;
   #onError;
+
+  constructor({ runtimeDirectory } = {}) {
+    if (runtimeDirectory !== undefined && typeof runtimeDirectory !== "string") {
+      throw new TypeError("Native system audio runtime directory must be a string");
+    }
+    this.#runtimeDirectory = runtimeDirectory;
+  }
 
   get isRunning() {
     return this.#state !== "idle";
@@ -45,17 +55,29 @@ class NativeSystemAudioProcess {
     if (typeof onAudio !== "function" || typeof onError !== "function") {
       throw new TypeError("Native system audio callbacks must be functions");
     }
-    const executablePath = resolveNativeAudioExecutable(__dirname, process.platform, process.arch);
-    if (!fs.existsSync(executablePath)) {
-      throw new NativeSystemAudioError(
-        "SYSTEM_AUDIO_HELPER_MISSING",
-        `缺少 ${process.platform}/${process.arch} 系统音频组件，请重新安装完整插件`,
-      );
-    }
     this.#state = "starting";
     this.#stderr = "";
     this.#onAudio = onAudio;
     this.#onError = onError;
+    let executablePath;
+    try {
+      executablePath = await prepareNativeAudioExecutable(
+        __dirname,
+        this.#runtimeDirectory,
+        process.platform,
+        process.arch,
+      );
+    } catch (error) {
+      this.#state = "idle";
+      this.#resetCallbacks();
+      if (error instanceof NativeSystemAudioError) {
+        throw error;
+      }
+      throw new NativeSystemAudioError(
+        "SYSTEM_AUDIO_HELPER_INSTALL_FAILED",
+        `无法准备系统音频组件：${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     const decoder = new NativeAudioFrameDecoder();
     const child = spawn(executablePath, [], {
       cwd: path.dirname(executablePath),
@@ -92,6 +114,13 @@ class NativeSystemAudioProcess {
       }
     });
     child.once("error", (error) => {
+      console.error("native system audio helper spawn failed", {
+        platform: process.platform,
+        arch: process.arch,
+        executablePath,
+        cwd: path.dirname(executablePath),
+        code: typeof error?.code === "string" ? error.code : "UNKNOWN",
+      });
       this.#fail(new NativeSystemAudioError(
         "SYSTEM_AUDIO_HELPER_START_FAILED",
         `无法启动系统音频组件：${error.message}`,
@@ -239,6 +268,88 @@ function resolveNativeAudioExecutable(baseDirectory, platform, arch) {
   return path.join(baseDirectory, "native", target, executableName);
 }
 
+async function prepareNativeAudioExecutable(baseDirectory, runtimeDirectory, platform, arch) {
+  const bundledPath = resolveNativeAudioExecutable(baseDirectory, platform, arch);
+  if (!fs.existsSync(bundledPath)) {
+    throw new NativeSystemAudioError(
+      "SYSTEM_AUDIO_HELPER_MISSING",
+      `缺少 ${platform}/${arch} 系统音频组件，请重新安装完整插件`,
+    );
+  }
+  if (runtimeDirectory) {
+    return materializeNativeAudioExecutable(bundledPath, runtimeDirectory, platform);
+  }
+  return bundledPath;
+}
+
+async function materializeNativeAudioExecutable(sourcePath, runtimeDirectory, platform) {
+  const sourceStat = await fs.promises.stat(sourcePath);
+  if (!sourceStat.isFile() || sourceStat.size <= 0 || sourceStat.size > maxNativeHelperBytes) {
+    throw new Error("插件内的系统音频组件文件无效");
+  }
+  const source = await fs.promises.readFile(sourcePath);
+  const digest = sha256(source);
+  const targetDirectory = path.join(runtimeDirectory, digest);
+  const targetPath = path.join(targetDirectory, path.basename(sourcePath));
+  await fs.promises.mkdir(targetDirectory, { recursive: true });
+
+  if (await fileMatches(targetPath, digest)) {
+    if (platform === "darwin") {
+      await fs.promises.chmod(targetPath, 0o755);
+    }
+    return targetPath;
+  }
+
+  const temporaryPath = path.join(
+    targetDirectory,
+    `${path.basename(sourcePath)}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`,
+  );
+  try {
+    await fs.promises.writeFile(temporaryPath, source, { flag: "wx", mode: 0o755 });
+    try {
+      await fs.promises.rename(temporaryPath, targetPath);
+    } catch (error) {
+      if (!error || !["EEXIST", "EPERM"].includes(error.code) || !(await fileMatches(targetPath, digest))) {
+        throw error;
+      }
+    }
+    if (!(await fileMatches(targetPath, digest))) {
+      throw new Error("释放后的系统音频组件校验失败");
+    }
+    if (platform === "darwin") {
+      await fs.promises.chmod(targetPath, 0o755);
+    }
+    return targetPath;
+  } finally {
+    try {
+      await fs.promises.unlink(temporaryPath);
+    } catch (error) {
+      if (!error || error.code !== "ENOENT") {
+        console.error("cleanup native audio helper temporary file failed", error);
+      }
+    }
+  }
+}
+
+async function fileMatches(filePath, expectedDigest) {
+  try {
+    const stat = await fs.promises.lstat(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size > maxNativeHelperBytes) {
+      return false;
+    }
+    return sha256(await fs.promises.readFile(filePath)) === expectedDigest;
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 function parseJSONPayload(payload, frameName) {
   try {
     const value = JSON.parse(payload.toString("utf8"));
@@ -275,5 +386,6 @@ function sanitizeStderr(value) {
 module.exports = {
   NativeSystemAudioError,
   NativeSystemAudioProcess,
+  prepareNativeAudioExecutable,
   resolveNativeAudioExecutable,
 };

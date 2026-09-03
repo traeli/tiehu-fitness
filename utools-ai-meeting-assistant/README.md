@@ -105,6 +105,9 @@ ScreenCaptureKit，Windows 10+ 使用 WASAPI Loopback，两端都通过受控辅
 48kHz 单声道 PCM，再与可选麦克风在 Web Audio 中混音。macOS 首次使用需要在
 “系统设置 → 隐私与安全性 → 屏幕与系统音频录制”中允许 `Tiehu System Audio`；
 拒绝、辅助程序缺失或异常退出都会停止会议，不能静默回退为麦克风录音。
+正式 uTools 包会把辅助程序收进插件包。首次开始会议时，preload 读取当前平台文件，
+按 SHA-256 校验后释放到 uTools `userData/meeting-assistant/native`，再从该可写目录
+启动；不依赖不同系统上的插件包路径表现，插件也不会从网络动态下载或执行辅助程序。
 
 `npm run build` 会先构建当前系统的原生组件。macOS 需要 Xcode Command Line Tools，
 并同时生成 Apple Silicon 与 Intel 版本；Windows 需要在 Visual Studio Developer

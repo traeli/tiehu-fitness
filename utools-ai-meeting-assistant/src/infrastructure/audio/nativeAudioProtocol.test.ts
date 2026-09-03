@@ -1,5 +1,8 @@
 import { createRequire } from "node:module";
-import { describe, expect, it } from "vitest";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
 interface NativeAudioFrame {
   type: number;
@@ -16,8 +19,22 @@ const protocol = require("../../../plugin/native-audio-protocol.cjs") as {
   nativeAudioFrameTypes: { READY: number; AUDIO: number; ERROR: number };
 };
 const processModule = require("../../../plugin/native-audio-process.cjs") as {
+  prepareNativeAudioExecutable(
+    base: string,
+    runtimeDirectory: string | undefined,
+    platform: string,
+    arch: string,
+  ): Promise<string>;
   resolveNativeAudioExecutable(base: string, platform: string, arch: string): string;
 };
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, {
+    recursive: true,
+    force: true,
+  })));
+});
 
 describe("native audio frame decoder", () => {
   it("decodes split and coalesced frames without losing PCM bytes", () => {
@@ -57,6 +74,41 @@ describe("native audio executable resolution", () => {
   it("rejects unsupported platforms", () => {
     expect(() => processModule.resolveNativeAudioExecutable("/plugin", "linux", "x64"))
       .toThrow("暂不支持");
+  });
+
+  it("materializes a packaged Windows helper whenever a writable runtime directory is provided", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "tiehu-native-audio-"));
+    temporaryDirectories.push(root);
+    const bundle = path.join(root, "plugin.asar");
+    const source = processModule.resolveNativeAudioExecutable(bundle, "win32", "x64");
+    const runtime = path.join(root, "runtime");
+    const content = Buffer.from("MZ-native-audio-test", "ascii");
+    await mkdir(path.dirname(source), { recursive: true });
+    await writeFile(source, content);
+
+    const executable = await processModule.prepareNativeAudioExecutable(
+      bundle,
+      runtime,
+      "win32",
+      "x64",
+    );
+
+    expect(executable).not.toBe(source);
+    expect(executable.startsWith(runtime)).toBe(true);
+    expect(await readFile(executable)).toEqual(content);
+    expect(await processModule.prepareNativeAudioExecutable(bundle, runtime, "win32", "x64"))
+      .toBe(executable);
+  });
+
+  it("uses a source-tree helper directly when no runtime directory is provided", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "tiehu-native-audio-source-"));
+    temporaryDirectories.push(root);
+    const source = processModule.resolveNativeAudioExecutable(root, "win32", "x64");
+    await mkdir(path.dirname(source), { recursive: true });
+    await writeFile(source, Buffer.from("MZ-native-audio-source", "ascii"));
+
+    expect(await processModule.prepareNativeAudioExecutable(root, undefined, "win32", "x64"))
+      .toBe(source);
   });
 });
 

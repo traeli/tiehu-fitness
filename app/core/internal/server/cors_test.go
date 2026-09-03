@@ -59,6 +59,30 @@ func TestCORSFilterAllowsUToolsRendererOrigin(t *testing.T) {
 	}
 }
 
+func TestCORSFilterAllowsPackagedUToolsFileOrigin(t *testing.T) {
+	filter, err := newCORSFilter(&conf.HTTPCORS{AllowedOrigins: []string{"file://"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := filter(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusAccepted)
+	}))
+	request := httptest.NewRequest(http.MethodOptions, "/v1/auth/utools/login", nil)
+	request.Header.Set("Origin", "file://")
+	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	request.Header.Set("Access-Control-Request-Headers", "content-type")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+	if got := response.Header().Get("Access-Control-Allow-Origin"); got != "file://" {
+		t.Fatalf("Access-Control-Allow-Origin = %q", got)
+	}
+}
+
 func TestCORSFilterRejectsUnknownOriginAndHeader(t *testing.T) {
 	filter, err := newCORSFilter(&conf.HTTPCORS{AllowedOrigins: []string{"http://127.0.0.1:5173"}})
 	if err != nil {
@@ -73,6 +97,8 @@ func TestCORSFilterRejectsUnknownOriginAndHeader(t *testing.T) {
 		header string
 	}{
 		{name: "unknown origin", origin: "https://attacker.example"},
+		{name: "unconfigured file origin", origin: "file://"},
+		{name: "file path is not an origin", origin: "file:///tmp/index.html"},
 		{name: "unknown header", origin: "http://127.0.0.1:5173", header: "X-Unsafe"},
 	}
 	for _, tt := range tests {
