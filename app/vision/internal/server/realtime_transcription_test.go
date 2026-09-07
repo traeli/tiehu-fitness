@@ -650,6 +650,7 @@ func buildRealtimeTestHandler(t *testing.T, maxConnections int32, provider biz.A
 	handler, err := NewRealtimeWebSocketHandler(&conf.RealtimeTranscription{
 		AllowedOrigins:   []string{"http://localhost:*", "http://127.0.0.1:*", "utools://*", "file://"},
 		HandshakeTimeout: durationpb.New(time.Second), IdleTimeout: durationpb.New(5 * time.Second), WriteTimeout: durationpb.New(time.Second),
+		UsageReportInterval: durationpb.New(15 * time.Second), StaleSessionTimeout: durationpb.New(90 * time.Second),
 		MaxMessageBytes: 16_384, MaxQueueChunks: 4, MaxConnections: maxConnections,
 	}, realtimeService, logger)
 	if err != nil {

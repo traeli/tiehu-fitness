@@ -36,7 +36,7 @@ export class WebAuthGateway {
     const response = await this.client.request(path, {
       method: "POST",
       body: JSON.stringify(body),
-    });
+    }, { retryUnauthorized: false });
     return applyAuthenticationResponse(this.client, response);
   }
 }
@@ -48,7 +48,7 @@ export class UToolsAuthGateway {
     const response = await this.client.request("/v1/auth/utools/login", {
       method: "POST",
       body: JSON.stringify({ temporary_token: temporaryToken, device_id: deviceId }),
-    });
+    }, { retryUnauthorized: false });
     applyAuthenticationResponse(this.client, response);
   }
 }

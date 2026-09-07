@@ -110,7 +110,9 @@ func (r *MeetingRepo) CreateWithQuota(ctx context.Context, input biz.MeetingCrea
 		return nil
 	})
 	if err != nil {
-		if stderrors.Is(err, biz.ErrMeetingIdempotencyConflict) || stderrors.Is(err, biz.ErrMeetingQuotaExceeded) {
+		if stderrors.Is(err, biz.ErrMeetingIdempotencyConflict) ||
+			stderrors.Is(err, biz.ErrMeetingQuotaExceeded) ||
+			stderrors.Is(err, biz.ErrMeetingConcurrentLimitReached) {
 			return nil, err
 		}
 		return nil, quotaDataError(err)
@@ -412,14 +414,6 @@ func (r *MeetingRepo) FinalizeTranscription(ctx context.Context, input biz.Final
 			return err
 		}
 		alreadyFinalized := currentMeetingStatus == input.MeetingStatus && currentTranscriptionStatus == input.TranscriptionStatus
-		if input.MeetingStatus == biz.MeetingStatusProcessing && input.TranscriptionStatus == biz.MeetingTranscriptionStatusSucceeded &&
-			currentTranscriptionStatus == biz.MeetingTranscriptionStatusSucceeded &&
-			(currentMeetingStatus == biz.MeetingStatusCompleted || currentMeetingStatus == biz.MeetingStatusPartiallyCompleted) {
-			// A summary callback may reach core before vision receives the response
-			// for this idempotent transcription completion retry. Never move a
-			// summary terminal meeting back to processing.
-			alreadyFinalized = true
-		}
 		if !alreadyFinalized {
 			// Meeting and transcription are two dimensions of the same lifecycle.
 			// A client Stop may already move only the meeting dimension to

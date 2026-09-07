@@ -22,7 +22,7 @@ func TestNewMeetingQuotaPolicyValidatesStoredInput(t *testing.T) {
 		}},
 		{name: "report interval exceeds upper bound", mutate: func(c *MeetingQuotaPolicyInput) { c.UsageReportInterval = 2 * time.Hour }},
 		{name: "reservation ttl exceeds upper bound", mutate: func(c *MeetingQuotaPolicyInput) { c.ReservationTTL = 26 * time.Hour }},
-		{name: "reservation shorter than meeting", mutate: func(c *MeetingQuotaPolicyInput) { c.ReservationTTL = 3 * time.Hour }},
+		{name: "reservation shorter than two reports", mutate: func(c *MeetingQuotaPolicyInput) { c.ReservationTTL = 45 * time.Second }},
 		{name: "missing redis failure policy", mutate: func(c *MeetingQuotaPolicyInput) {
 			c.RedisFailurePolicy = RedisQuotaFailurePolicyUnspecified
 		}},
@@ -54,7 +54,7 @@ func validMeetingQuotaConfig() MeetingQuotaPolicyInput {
 		CreateRateWindow:       10 * time.Minute,
 		PeriodTimezone:         "Asia/Shanghai",
 		UsageReportInterval:    30 * time.Second,
-		ReservationTTL:         4*time.Hour + 30*time.Second,
+		ReservationTTL:         2 * time.Minute,
 		RedisFailurePolicy:     RedisQuotaFailurePolicyDeny,
 	}
 }

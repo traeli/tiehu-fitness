@@ -326,8 +326,8 @@ func TestMeetingTranscriptionCompletionAtomicallySettlesAndReleasesQuota(t *test
 	if err != nil {
 		t.Fatalf("CompleteTranscription(repeated) error = %v", err)
 	}
-	if first.Meeting.Status != biz.MeetingStatusProcessing || first.Meeting.TranscriptionStatus != biz.MeetingTranscriptionStatusSucceeded ||
-		first.Usage.ActualSeconds != 2 || first.Usage.ProviderUsageSeconds != 3 || repeated.Usage.ID != first.Usage.ID {
+	if first.Meeting.Status != biz.MeetingStatusCompleted || first.Meeting.TranscriptionStatus != biz.MeetingTranscriptionStatusSucceeded ||
+		first.Usage.ActualSeconds != 60 || first.Usage.ProviderUsageSeconds != 3 || repeated.Usage.ID != first.Usage.ID {
 		t.Fatalf("completion results = first %#v, repeated %#v", first, repeated)
 	}
 	vision.mu.Lock()
@@ -344,9 +344,22 @@ func TestMeetingTranscriptionCompletionAtomicallySettlesAndReleasesQuota(t *test
 	if err := db.WithContext(context.Background()).Where("user_id = ? AND period_start = ?", userID, settledMeeting.QuotaPeriodStart).Take(&period).Error; err != nil {
 		t.Fatal(err)
 	}
-	if settledMeeting.QuotaStatus != biz.MeetingUsageReservationStatusSettled.String() || settledMeeting.ActualAudioSeconds != 2 ||
-		period.ReservedSeconds != 0 || period.ConsumedSeconds != 2 {
+	if settledMeeting.QuotaStatus != biz.MeetingUsageReservationStatusSettled.String() || settledMeeting.ActualAudioSeconds != 60 ||
+		period.ReservedSeconds != 0 || period.ConsumedSeconds != 60 {
 		t.Fatalf("settled compact ledger = meeting %#v, period %#v", settledMeeting, period)
+	}
+	if err := usecase.FailSummary(context.Background(), biz.FailMeetingSummaryCommand{
+		MeetingID: settledMeeting.ID, Version: settledMeeting.SummaryVersion,
+		SourceTranscriptRevision: settledMeeting.SummarySourceTranscriptRevision,
+		Reason:                   biz.MeetingSummaryFailureReasonTimeout, FailedAt: now.Add(3 * time.Second),
+	}); err != nil {
+		t.Fatalf("FailSummary() error = %v", err)
+	}
+	if err := db.WithContext(context.Background()).Where("id = ?", settledMeeting.ID).Take(&settledMeeting).Error; err != nil {
+		t.Fatal(err)
+	}
+	if settledMeeting.Status != biz.MeetingStatusCompleted.String() || settledMeeting.SummaryStatus != biz.MeetingSummaryStatusFailed.String() {
+		t.Fatalf("summary failure changed terminal meeting state = %#v", settledMeeting)
 	}
 	vision.mu.Lock()
 	vision.session = nil
@@ -356,6 +369,61 @@ func TestMeetingTranscriptionCompletionAtomicallySettlesAndReleasesQuota(t *test
 		TranscriptionConsent: true, Now: now.Add(3 * time.Second),
 	}); err != nil {
 		t.Fatalf("Create() after released concurrent slot error = %v", err)
+	}
+}
+
+func TestMeetingTranscriptionCompletionWithoutTextStoresFallbackSummary(t *testing.T) {
+	db := openQuotaTestDatabase(t)
+	userID := createQuotaTestUser(t, db)
+	vision := &meetingDataVisionGateway{}
+	usecase := newMeetingDataTestUsecase(t, db, vision)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	created, err := usecase.Create(context.Background(), biz.CreateMeetingCommand{
+		UserID: userID, IdempotencyKey: uuid.NewString(), Language: biz.MeetingLanguageAuto,
+		TranscriptionConsent: true, Now: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := usecase.Stop(context.Background(), userID, created.Meeting.ID, uuid.NewString(), now.Add(20*time.Second)); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	command := biz.FinalizeMeetingTranscriptionCommand{
+		MeetingID: created.Meeting.ID, SessionID: created.Session.ID, ReservationID: created.Meeting.ReservationID,
+		TotalAcceptedSeconds: 20, ProviderUsageSeconds: 20, FinalizedAt: now.Add(21 * time.Second),
+	}
+	first, err := usecase.CompleteTranscription(context.Background(), command)
+	if err != nil {
+		t.Fatalf("CompleteTranscription() error = %v", err)
+	}
+	repeated, err := usecase.CompleteTranscription(context.Background(), command)
+	if err != nil {
+		t.Fatalf("CompleteTranscription(repeated) error = %v", err)
+	}
+	if first.Meeting.Status != biz.MeetingStatusCompleted || first.Meeting.TranscriptionStatus != biz.MeetingTranscriptionStatusSucceeded ||
+		first.Meeting.SummaryStatus != biz.MeetingSummaryStatusSucceeded || first.Usage.ActualSeconds != 60 || repeated.Meeting.Status != biz.MeetingStatusCompleted {
+		t.Fatalf("empty transcript completion = first %#v, repeated %#v", first, repeated)
+	}
+	vision.mu.Lock()
+	summaryTaskCount := vision.summaryTaskCount
+	vision.mu.Unlock()
+	if summaryTaskCount != 0 {
+		t.Fatalf("LLM summary task submissions = %d, want 0", summaryTaskCount)
+	}
+	view, err := usecase.GetSummary(context.Background(), userID, created.Meeting.ID)
+	if err != nil {
+		t.Fatalf("GetSummary() error = %v", err)
+	}
+	if view.Status != biz.MeetingSummaryStatusSucceeded || view.Summary == nil ||
+		view.Summary.Topic != "未识别到有效转写" || view.Summary.SourceTranscriptRevision != 0 {
+		t.Fatalf("fallback summary = %#v", view)
+	}
+	var period model.UserMeetingMonthlyQuota
+	if err := db.WithContext(context.Background()).Where("user_id = ?", userID).Take(&period).Error; err != nil {
+		t.Fatal(err)
+	}
+	if period.ConsumedSeconds != 60 || period.ReservedSeconds != 0 {
+		t.Fatalf("empty transcript quota = %#v", period)
 	}
 }
 

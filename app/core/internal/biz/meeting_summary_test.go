@@ -29,6 +29,21 @@ func TestMeetingSummaryValidateCompleted(t *testing.T) {
 	}
 }
 
+func TestEmptyTranscriptSummary(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	summary := NewEmptyTranscriptSummary(uuid.NewString(), now)
+	if err := summary.ValidateEmptyTranscriptFallback(); err != nil {
+		t.Fatalf("ValidateEmptyTranscriptFallback() error = %v", err)
+	}
+	if summary.SourceTranscriptRevision != 0 || summary.Topic != "未识别到有效转写" || len(summary.KeyDiscussions) != 0 {
+		t.Fatalf("NewEmptyTranscriptSummary() = %#v", summary)
+	}
+	summary.Provider = "deepseek"
+	if err := summary.ValidateEmptyTranscriptFallback(); err == nil {
+		t.Fatal("ValidateEmptyTranscriptFallback() allowed LLM provenance")
+	}
+}
+
 func TestMeetingSummaryStatusTransitions(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

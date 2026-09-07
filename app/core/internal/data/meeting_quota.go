@@ -63,10 +63,10 @@ func checkedQuotaDuration(seconds int64) (time.Duration, error) {
 	return time.Duration(seconds) * time.Second, nil
 }
 
-func (r *MeetingQuotaRepo) ReportUsage(ctx context.Context, reservationID, meetingID string, totalSeconds int64, observedAt time.Time) (*biz.MeetingUsageReservation, error) {
+func (r *MeetingQuotaRepo) ReportUsage(ctx context.Context, input biz.MeetingQuotaReportInput) (*biz.MeetingUsageReservation, error) {
 	var output *biz.MeetingUsageReservation
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := lockMeetingByReservation(ctx, tx, reservationID, meetingID)
+		row, err := lockMeetingByReservation(ctx, tx, input.ReservationID, input.MeetingID)
 		if err != nil {
 			return err
 		}
@@ -75,15 +75,24 @@ func (r *MeetingQuotaRepo) ReportUsage(ctx context.Context, reservationID, meeti
 			return err
 		}
 		if status == biz.MeetingUsageReservationStatusActive {
-			next := minQuotaSeconds(totalSeconds, row.GrantedAudioSeconds)
+			next := minQuotaSeconds(input.TotalSeconds, row.GrantedAudioSeconds)
+			updates := make(map[string]any, 3)
 			if next > row.ReportedAudioSeconds {
-				if err := tx.WithContext(ctx).Model(row).Updates(map[string]any{
-					"reported_audio_seconds": next, "updated_at": observedAt,
-				}).Error; err != nil {
+				updates["reported_audio_seconds"] = next
+				row.ReportedAudioSeconds = next
+			}
+			if input.ExpiresAt.After(row.QuotaExpiresAt) {
+				updates["quota_expires_at"] = input.ExpiresAt
+				row.QuotaExpiresAt = input.ExpiresAt
+			}
+			if input.ObservedAt.After(row.UpdatedAt) {
+				updates["updated_at"] = input.ObservedAt
+				row.UpdatedAt = input.ObservedAt
+			}
+			if len(updates) > 0 {
+				if err := tx.WithContext(ctx).Model(row).Updates(updates).Error; err != nil {
 					return err
 				}
-				row.ReportedAudioSeconds = next
-				row.UpdatedAt = observedAt
 			}
 		}
 		output, err = meetingToQuotaReservation(row)
@@ -128,6 +137,13 @@ func (r *MeetingQuotaRepo) reserveWithTx(ctx context.Context, tx *gorm.DB, input
 	if err := reconcileExpiredMeetings(ctx, tx, period, input.Now); err != nil {
 		return nil, err
 	}
+	activeCount, err := activeMeetingCount(ctx, tx, period.UserID, period.PeriodStart, input.Now)
+	if err != nil {
+		return nil, err
+	}
+	if activeCount >= int64(input.Policy.MaxConcurrentMeetings) {
+		return nil, biz.ErrMeetingConcurrentLimitReached
+	}
 	totalLimit, err := monthlyQuotaTotalLimit(period)
 	if err != nil {
 		return nil, err
@@ -150,15 +166,10 @@ func (r *MeetingQuotaRepo) reserveWithTx(ctx context.Context, tx *gorm.DB, input
 		return nil, fmt.Errorf("monthly meeting quota disappeared during reservation")
 	}
 	period.ReservedSeconds += granted
-	expiresAt := input.ExpiresAt
-	minimumExpiry := input.Now.Add(time.Duration(granted)*time.Second + input.Policy.UsageReportInterval)
-	if minimumExpiry.After(expiresAt) {
-		expiresAt = minimumExpiry
-	}
 	reservation := &biz.MeetingUsageReservation{
 		ID: reservationID, UserID: input.UserID, MeetingID: input.MeetingID,
 		Period: input.Period, GrantedSeconds: granted,
-		Status: biz.MeetingUsageReservationStatusActive, ExpiresAt: expiresAt,
+		Status: biz.MeetingUsageReservationStatusActive, ExpiresAt: input.ExpiresAt,
 	}
 	snapshot, err := quotaSnapshot(ctx, tx, period, input.Policy, input.Now)
 	if err != nil {
@@ -218,12 +229,22 @@ func (r *MeetingQuotaRepo) finalizeWithTx(ctx context.Context, tx *gorm.DB, inpu
 		return nil, fmt.Errorf("monthly meeting quota reserved balance is inconsistent")
 	}
 	terminalStatus := reservationStatusForReason(input.Reason)
-	if err := tx.WithContext(ctx).Model(meeting).Updates(map[string]any{
+	meetingUpdates := map[string]any{
 		"reported_audio_seconds": reported, "actual_audio_seconds": actual,
 		"provider_usage_seconds": input.ProviderUsageSeconds,
 		"quota_status":           terminalStatus.String(), "quota_finalized_at": input.FinalizedAt,
 		"quota_settlement_reason": input.Reason.String(), "updated_at": input.FinalizedAt,
-	}).Error; err != nil {
+	}
+	if input.Reason == biz.MeetingUsageSettlementReasonExpired {
+		expiryUpdates, err := expiredMeetingStateUpdates(meeting, input.FinalizedAt)
+		if err != nil {
+			return nil, err
+		}
+		for key, value := range expiryUpdates {
+			meetingUpdates[key] = value
+		}
+	}
+	if err := tx.WithContext(ctx).Model(meeting).Updates(meetingUpdates).Error; err != nil {
 		return nil, err
 	}
 	meeting.ReportedAudioSeconds = reported
@@ -313,7 +334,10 @@ func lockMonthlyQuota(ctx context.Context, tx *gorm.DB, userID string, period bi
 
 func reconcileExpiredMeetings(ctx context.Context, tx *gorm.DB, monthly *model.UserMeetingMonthlyQuota, now time.Time) error {
 	var rows []model.Meeting
-	if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+	// Finalization locks a meeting before its monthly quota row. Reconciliation
+	// owns the monthly row first, so SKIP LOCKED avoids the inverse lock order;
+	// a row currently being finalized no longer needs expiry reconciliation.
+	if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
 		Where("user_id = ? AND quota_period_start = ? AND quota_status = ? AND quota_expires_at <= ? AND deleted_at IS NULL",
 			monthly.UserID, monthly.PeriodStart, biz.MeetingUsageReservationStatusActive.String(), now).
 		Order("quota_expires_at ASC").Limit(maxExpiredReservationsPerReconciliation).Find(&rows).Error; err != nil {
@@ -340,15 +364,51 @@ func reconcileExpiredMeetings(ctx context.Context, tx *gorm.DB, monthly *model.U
 		}
 		monthly.ReservedSeconds -= row.GrantedAudioSeconds
 		monthly.ConsumedSeconds += actual
-		if err := tx.WithContext(ctx).Model(row).Updates(map[string]any{
+		meetingUpdates := map[string]any{
 			"reported_audio_seconds": billable, "actual_audio_seconds": actual, "quota_status": biz.MeetingUsageReservationStatusExpired.String(),
 			"quota_finalized_at": now, "quota_settlement_reason": biz.MeetingUsageSettlementReasonExpired.String(),
 			"updated_at": now,
-		}).Error; err != nil {
+		}
+		expiryUpdates, err := expiredMeetingStateUpdates(row, now)
+		if err != nil {
+			return err
+		}
+		for key, value := range expiryUpdates {
+			meetingUpdates[key] = value
+		}
+		if err := tx.WithContext(ctx).Model(row).Updates(meetingUpdates).Error; err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func expiredMeetingStateUpdates(meeting *model.Meeting, expiredAt time.Time) (map[string]any, error) {
+	meetingStatus, err := biz.ParseMeetingStatus(meeting.Status)
+	if err != nil {
+		return nil, err
+	}
+	transcriptionStatus, err := biz.ParseMeetingTranscriptionStatus(meeting.TranscriptionStatus)
+	if err != nil {
+		return nil, err
+	}
+	updates := make(map[string]any, 3)
+	if !meetingStatus.IsTerminal() {
+		if !meetingStatus.CanTransitionTo(biz.MeetingStatusFailed) {
+			return nil, fmt.Errorf("meeting status cannot transition to failed after quota lease expiry")
+		}
+		updates["status"] = biz.MeetingStatusFailed.String()
+		if meeting.StoppedAt == nil {
+			updates["stopped_at"] = expiredAt
+		}
+	}
+	if !transcriptionStatus.IsTerminal() {
+		if !transcriptionStatus.CanTransitionTo(biz.MeetingTranscriptionStatusExpired) {
+			return nil, fmt.Errorf("meeting transcription status cannot transition to expired after quota lease expiry")
+		}
+		updates["transcription_status"] = biz.MeetingTranscriptionStatusExpired.String()
+	}
+	return updates, nil
 }
 
 func quotaSnapshot(ctx context.Context, tx *gorm.DB, monthly *model.UserMeetingMonthlyQuota, policy biz.MeetingQuotaPolicy, now time.Time) (*biz.MeetingQuotaSnapshot, error) {

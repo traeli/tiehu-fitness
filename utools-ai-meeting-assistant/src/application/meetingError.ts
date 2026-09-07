@@ -1,4 +1,4 @@
-import { ApiError } from "@/infrastructure/api/apiClient";
+import { ApiError, ApiRequestTimeoutError } from "@/infrastructure/api/apiClient";
 import { AudioCaptureError } from "@/infrastructure/audio/microphoneRecorder";
 import { RealtimeTranscriptionError } from "@/infrastructure/realtime/transcriptionClient";
 
@@ -62,6 +62,15 @@ export function toMeetingError(
   }
   if (error instanceof ApiError) {
     return mapApiError(error, failedAction);
+  }
+  if (error instanceof ApiRequestTimeoutError) {
+    return {
+      code: "NETWORK_UNAVAILABLE",
+      title: "会议服务响应超时",
+      message: `${error.message}，请检查网络后重试。`,
+      retryable: true,
+      failedAction,
+    };
   }
   if (error instanceof RealtimeTranscriptionError) {
     return mapRealtimeError(error, failedAction);

@@ -117,7 +117,7 @@ func TestCompactMeetingQuotaLedgerReservesAllRemainingAndSettlesInMeeting(t *tes
 		Language:           biz.MeetingLanguageAuto, Now: now,
 	}, biz.MeetingQuotaReserveInput{
 		ReservationID: reservationID, UserID: userID, MeetingID: meetingID,
-		Period: policy.PeriodAt(now), Policy: policy, Now: now, ExpiresAt: now.Add(time.Hour),
+		Period: policy.PeriodAt(now), Policy: policy, Now: now, ExpiresAt: now.Add(2 * time.Minute),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -125,8 +125,24 @@ func TestCompactMeetingQuotaLedgerReservesAllRemainingAndSettlesInMeeting(t *tes
 	if created.Reservation.GrantedSeconds != 120 {
 		t.Fatalf("granted seconds = %d, want all 120 remaining seconds", created.Reservation.GrantedSeconds)
 	}
-	if _, err := repo.ReportUsage(context.Background(), reservationID, meetingID, 4, now.Add(time.Minute)); err != nil {
+	if _, err := repo.ReportUsage(context.Background(), biz.MeetingQuotaReportInput{
+		ReservationID: reservationID, MeetingID: meetingID, TotalSeconds: 4,
+		ObservedAt: now.Add(time.Minute), ExpiresAt: now.Add(3 * time.Minute),
+	}); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := repo.ReportUsage(context.Background(), biz.MeetingQuotaReportInput{
+		ReservationID: reservationID, MeetingID: meetingID, TotalSeconds: 4,
+		ObservedAt: now.Add(2 * time.Minute), ExpiresAt: now.Add(4 * time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var renewed model.Meeting
+	if err := db.Where("id = ?", meetingID).Take(&renewed).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !renewed.QuotaExpiresAt.Equal(now.Add(4*time.Minute)) || renewed.ReportedAudioSeconds != 4 {
+		t.Fatalf("renewed quota lease = %#v", renewed)
 	}
 	record, err := repo.Finalize(context.Background(), biz.MeetingQuotaFinalizeInput{
 		MeetingUsageFinalizeCommand: biz.MeetingUsageFinalizeCommand{
@@ -153,6 +169,52 @@ func TestCompactMeetingQuotaLedgerReservesAllRemainingAndSettlesInMeeting(t *tes
 	}
 }
 
+func TestExpiredQuotaLeaseSettlesUsageAndClosesMeeting(t *testing.T) {
+	db := openQuotaTestDatabase(t)
+	userID := createQuotaTestUser(t, db)
+	repo := NewMeetingQuotaRepo(db)
+	meetingRepo := NewMeetingRepo(db)
+	policy := quotaTestPolicy(t, 300, 300, 1)
+	now := time.Date(2026, 9, 4, 8, 0, 0, 0, time.UTC)
+	meetingID, reservationID := uuid.NewString(), uuid.NewString()
+	if _, err := meetingRepo.CreateWithQuota(context.Background(), biz.MeetingCreatePersistenceInput{
+		MeetingID: meetingID, UserID: userID, IdempotencyKey: uuid.NewString(),
+		RequestFingerprint: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		Language:           biz.MeetingLanguageAuto, Now: now,
+	}, biz.MeetingQuotaReserveInput{
+		ReservationID: reservationID, UserID: userID, MeetingID: meetingID,
+		Period: policy.PeriodAt(now), Policy: policy, Now: now, ExpiresAt: now.Add(time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.ReportUsage(context.Background(), biz.MeetingQuotaReportInput{
+		ReservationID: reservationID, MeetingID: meetingID, TotalSeconds: 1,
+		ObservedAt: now.Add(10 * time.Second), ExpiresAt: now.Add(70 * time.Second),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetSnapshot(context.Background(), userID, policy.PeriodAt(now), policy, now.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	var meeting model.Meeting
+	if err := db.Where("id = ?", meetingID).Take(&meeting).Error; err != nil {
+		t.Fatal(err)
+	}
+	if meeting.QuotaStatus != biz.MeetingUsageReservationStatusExpired.String() ||
+		meeting.Status != biz.MeetingStatusFailed.String() ||
+		meeting.TranscriptionStatus != biz.MeetingTranscriptionStatusExpired.String() ||
+		meeting.ActualAudioSeconds != 60 || meeting.StoppedAt == nil {
+		t.Fatalf("expired meeting = %#v", meeting)
+	}
+	var monthly model.UserMeetingMonthlyQuota
+	if err := db.Where("user_id = ? AND period_start = ?", userID, policy.PeriodAt(now).Start).Take(&monthly).Error; err != nil {
+		t.Fatal(err)
+	}
+	if monthly.ReservedSeconds != 0 || monthly.ConsumedSeconds != 60 {
+		t.Fatalf("expired monthly quota = %#v", monthly)
+	}
+}
+
 func TestMeetingQuotaRepositorySnapshotsMonthlyBaseAndAddsPurchasedQuota(t *testing.T) {
 	db := openQuotaTestDatabase(t)
 	userID := createQuotaTestUser(t, db)
@@ -171,6 +233,50 @@ func TestMeetingQuotaRepositorySnapshotsMonthlyBaseAndAddsPurchasedQuota(t *test
 	purchased, err := repo.GetSnapshot(context.Background(), userID, period, policy, now)
 	if err != nil || purchased.TotalLimitSeconds != 15 || purchased.RemainingSeconds != 15 {
 		t.Fatalf("purchased monthly quota = (%#v, %v)", purchased, err)
+	}
+}
+
+func TestMeetingQuotaRepositoryEnforcesConcurrentLimitAfterQuotaPurchase(t *testing.T) {
+	db := openQuotaTestDatabase(t)
+	userID := createQuotaTestUser(t, db)
+	meetingRepo := NewMeetingRepo(db)
+	policy := quotaTestPolicy(t, 120, 120, 1)
+	now := time.Date(2026, 9, 5, 8, 0, 0, 0, time.UTC)
+	firstMeetingID := uuid.NewString()
+	if _, err := meetingRepo.CreateWithQuota(context.Background(), biz.MeetingCreatePersistenceInput{
+		MeetingID: firstMeetingID, UserID: userID, IdempotencyKey: uuid.NewString(),
+		RequestFingerprint: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		Language:           biz.MeetingLanguageAuto, Now: now,
+	}, biz.MeetingQuotaReserveInput{
+		ReservationID: uuid.NewString(), UserID: userID, MeetingID: firstMeetingID,
+		Period: policy.PeriodAt(now), Policy: policy, Now: now, ExpiresAt: now.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	period := policy.PeriodAt(now)
+	if err := db.Model(&model.UserMeetingMonthlyQuota{}).
+		Where("user_id = ? AND period_start = ?", userID, period.Start).
+		Update("purchased_quota_seconds", 120).Error; err != nil {
+		t.Fatal(err)
+	}
+	secondMeetingID := uuid.NewString()
+	_, err := meetingRepo.CreateWithQuota(context.Background(), biz.MeetingCreatePersistenceInput{
+		MeetingID: secondMeetingID, UserID: userID, IdempotencyKey: uuid.NewString(),
+		RequestFingerprint: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		Language:           biz.MeetingLanguageAuto, Now: now.Add(time.Second),
+	}, biz.MeetingQuotaReserveInput{
+		ReservationID: uuid.NewString(), UserID: userID, MeetingID: secondMeetingID,
+		Period: period, Policy: policy, Now: now.Add(time.Second), ExpiresAt: now.Add(2*time.Minute + time.Second),
+	})
+	if !stderrors.Is(err, biz.ErrMeetingConcurrentLimitReached) {
+		t.Fatalf("second CreateWithQuota() error = %v", err)
+	}
+	var count int64
+	if err := db.Model(&model.Meeting{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("meeting count = %d, want 1", count)
 	}
 }
 
@@ -225,16 +331,9 @@ func quotaTestPolicy(t *testing.T, monthly, perMeeting int64, concurrent int32) 
 	return biz.MeetingQuotaPolicy{
 		MonthlyAudioSeconds: monthly, MaxMeetingAudioSeconds: perMeeting, MaxConcurrentMeetings: concurrent,
 		CreateRateLimit: 100, CreateRateWindow: time.Minute, UsageReportInterval: time.Second,
-		ReservationTTL: time.Duration(maxInt64ForTest(perMeeting+1, 2)) * time.Second,
+		ReservationTTL: 2 * time.Minute,
 		PeriodLocation: location, RedisFailurePolicy: biz.RedisQuotaFailurePolicyPostgresFallback,
 	}
-}
-
-func maxInt64ForTest(left, right int64) int64 {
-	if left > right {
-		return left
-	}
-	return right
 }
 
 func formatUnixMillis(value time.Time) string { return strconv.FormatInt(value.UnixMilli(), 10) }

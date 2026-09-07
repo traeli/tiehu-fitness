@@ -318,4 +318,14 @@ describe("HttpMeetingGateway", () => {
       },
     });
   });
+
+  it("rejects a succeeded summary response without summary content", async () => {
+    const api = new StubApiClient({
+      status: "MEETING_SUMMARY_STATUS_SUCCEEDED",
+    });
+
+    await expect(new HttpMeetingGateway(api).getMeetingSummary("meeting-id")).rejects.toThrow(
+      "Succeeded meeting summary response is missing summary content",
+    );
+  });
 });

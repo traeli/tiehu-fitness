@@ -253,6 +253,17 @@ type MeetingQuotaFinalizeInput struct {
 	Kind MeetingUsageKind
 }
 
+// MeetingQuotaReportInput carries one cumulative usage heartbeat. ExpiresAt
+// renews the short reservation lease without coupling persistence to policy
+// lookup or wall-clock decisions.
+type MeetingQuotaReportInput struct {
+	ReservationID string
+	MeetingID     string
+	TotalSeconds  int64
+	ObservedAt    time.Time
+	ExpiresAt     time.Time
+}
+
 type MeetingCreateRateDecision struct {
 	Allowed    bool
 	RetryAfter time.Duration
@@ -261,10 +272,11 @@ type MeetingCreateRateDecision struct {
 var (
 	ErrMeetingQuotaReservationNotFound = stderrors.New("meeting quota reservation not found")
 	ErrMeetingQuotaExceeded            = stderrors.New("meeting quota exceeded")
+	ErrMeetingConcurrentLimitReached   = stderrors.New("meeting concurrent limit reached")
 )
 
 type MeetingQuotaRepo interface {
-	ReportUsage(context.Context, string, string, int64, time.Time) (*MeetingUsageReservation, error)
+	ReportUsage(context.Context, MeetingQuotaReportInput) (*MeetingUsageReservation, error)
 	Finalize(context.Context, MeetingQuotaFinalizeInput) (*MeetingUsageRecord, error)
 	GetSnapshot(context.Context, string, MeetingBillingPeriod, MeetingQuotaPolicy, time.Time) (*MeetingQuotaSnapshot, error)
 	ListExpiredReservations(context.Context, time.Time, int) ([]*MeetingUsageReservation, error)
@@ -337,11 +349,29 @@ func (uc *MeetingQuotaUsecase) ReportUsage(ctx context.Context, reservationID, m
 	if err := validateReservationCommand(reservationID, meetingID, totalSeconds); err != nil {
 		return nil, err
 	}
+	if observedAt.IsZero() {
+		return nil, kratoserrors.BadRequest("OBSERVED_AT_INVALID", "usage observation time is required")
+	}
 	totalSeconds, err := RoundMeetingAudioSeconds(totalSeconds)
 	if err != nil {
 		return nil, err
 	}
-	reservation, err := uc.repo.ReportUsage(ctx, reservationID, meetingID, totalSeconds, normalizedQuotaTime(observedAt))
+	policy, err := uc.effectivePolicy(ctx)
+	if err != nil {
+		return nil, err
+	}
+	observedAt = normalizedQuotaTime(observedAt)
+	receivedAt := normalizedQuotaTime(time.Now().UTC())
+	if observedAt.After(receivedAt.Add(5 * time.Minute)) {
+		return nil, kratoserrors.BadRequest("OBSERVED_AT_INVALID", "usage observation time is too far in the future")
+	}
+	reservation, err := uc.repo.ReportUsage(ctx, MeetingQuotaReportInput{
+		ReservationID: reservationID,
+		MeetingID:     meetingID,
+		TotalSeconds:  totalSeconds,
+		ObservedAt:    receivedAt,
+		ExpiresAt:     receivedAt.Add(policy.ReservationTTL),
+	})
 	if stderrors.Is(err, ErrMeetingQuotaReservationNotFound) {
 		return nil, kratoserrors.NotFound("MEETING_QUOTA_RESERVATION_NOT_FOUND", "meeting quota reservation not found")
 	}
@@ -485,11 +515,8 @@ func validateMeetingQuotaPolicy(policy MeetingQuotaPolicy) error {
 		return fmt.Errorf("meeting create rate window is out of range")
 	}
 	if policy.UsageReportInterval <= 0 || policy.UsageReportInterval > time.Hour ||
-		policy.ReservationTTL <= policy.UsageReportInterval || policy.ReservationTTL > 25*time.Hour {
+		policy.ReservationTTL < 2*policy.UsageReportInterval || policy.ReservationTTL > 25*time.Hour {
 		return fmt.Errorf("meeting usage and reservation durations are invalid")
-	}
-	if policy.ReservationTTL < time.Duration(policy.MaxMeetingAudioSeconds)*time.Second {
-		return fmt.Errorf("reservation TTL must cover maximum meeting duration")
 	}
 	if policy.PeriodLocation == nil || policy.PeriodLocation.String() != "Asia/Shanghai" {
 		return fmt.Errorf("meeting quota period location must be Asia/Shanghai")

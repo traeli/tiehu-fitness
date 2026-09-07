@@ -12,6 +12,7 @@ import {
 describe("meeting client state", () => {
   it("only stops an active recording", () => {
     expect(canStopMeeting("recording")).toBe(true);
+    expect(canStopMeeting("starting")).toBe(true);
     expect(canStopMeeting("processing")).toBe(false);
   });
 

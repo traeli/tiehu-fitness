@@ -29,7 +29,10 @@ asr:
   startup_probe:
     enabled: true
     timeout: 30s
-  session_timeout: 14400s
+  # The ticket contract permits a meeting to reserve up to 24 hours. Keep the
+  # internal ASR deadline aligned so Vision does not terminate a long meeting
+  # while the user still has granted quota.
+  session_timeout: 86400s
   connect_timeout: 5s
   read_timeout: 30s
   write_timeout: 5s
@@ -55,6 +58,8 @@ realtime_transcription:
   handshake_timeout: 10s
   idle_timeout: 30s
   write_timeout: 5s
+  usage_report_interval: 15s
+  stale_session_timeout: 90s
   max_message_bytes: 16384
   max_connections: 100
 core_grpc_client:
@@ -77,7 +82,10 @@ llm:
     endpoint: ${DEEPSEEK_ENDPOINT:https://api.deepseek.com/chat/completions}
 meeting_summary_worker:
   poll_interval: 1s
-  lease_timeout: 180s
+  # Covers both jobs in one batch at the 120-second provider timeout, plus
+  # transcript loading and Core delivery, so another replica cannot reclaim a
+  # still-running job.
+  lease_timeout: 360s
   batch_size: 2
   max_attempts: 5
   initial_backoff: 2s

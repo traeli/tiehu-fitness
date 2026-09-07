@@ -2,6 +2,7 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -58,6 +59,23 @@ func TestMeetingSummaryWorkerUsesJobProviderConfigSnapshot(t *testing.T) {
 	}
 }
 
+func TestMeetingSummaryDeliveryTerminalWriteFailureIsRescheduled(t *testing.T) {
+	now := time.Now().UTC()
+	repo := &meetingSummaryFakeRepo{
+		claimed: []*MeetingSummaryJob{{
+			ID: uuid.NewString(), MeetingID: uuid.NewString(), UserID: uuid.NewString(),
+			Status: MeetingSummaryJobStatusDeliveryPending,
+			Result: &MeetingSummary{Topic: "测试", Abstract: "摘要"},
+		}},
+		markSucceededErr: errors.New("database unavailable"),
+	}
+	uc := newTestMeetingSummaryUsecase(t, repo, &meetingSummaryFakeSink{}, &meetingSummarizerFakeResolver{})
+	processed, err := uc.ProcessBatch(context.Background(), now)
+	if err == nil || processed != 0 || repo.retryCalls != 1 {
+		t.Fatalf("ProcessBatch() = (%d, %v), retry calls = %d", processed, err, repo.retryCalls)
+	}
+}
+
 func newTestMeetingSummaryUsecase(t *testing.T, repo MeetingSummaryRepo, sink CoreMeetingSummarySink, resolver MeetingSummarizerResolver) *MeetingSummaryUsecase {
 	t.Helper()
 	uc, err := NewMeetingSummaryUsecase(repo, sink, resolver, MeetingSummaryPolicy{
@@ -102,8 +120,10 @@ func (s *meetingSummaryFakeSummarizer) Summarize(context.Context, *MeetingSummar
 }
 
 type meetingSummaryFakeRepo struct {
-	selection MeetingSummaryProviderSnapshot
-	claimed   []*MeetingSummaryJob
+	selection        MeetingSummaryProviderSnapshot
+	claimed          []*MeetingSummaryJob
+	markSucceededErr error
+	retryCalls       int
 }
 
 func (*meetingSummaryFakeRepo) RecordLLMRequest(context.Context, string, string, time.Time) error {
@@ -135,9 +155,12 @@ func (*meetingSummaryFakeRepo) SaveGenerated(context.Context, string, *MeetingSu
 func (*meetingSummaryFakeRepo) SaveFailureForDelivery(context.Context, string, MeetingSummaryFailureReason, time.Time) error {
 	return nil
 }
-func (*meetingSummaryFakeRepo) RetryJob(context.Context, string, time.Time) error { return nil }
-func (*meetingSummaryFakeRepo) MarkSucceeded(context.Context, string, time.Time) error {
+func (r *meetingSummaryFakeRepo) RetryJob(context.Context, string, time.Time) error {
+	r.retryCalls++
 	return nil
+}
+func (r *meetingSummaryFakeRepo) MarkSucceeded(context.Context, string, time.Time) error {
+	return r.markSucceededErr
 }
 func (*meetingSummaryFakeRepo) MarkFailed(context.Context, string, time.Time) error { return nil }
 

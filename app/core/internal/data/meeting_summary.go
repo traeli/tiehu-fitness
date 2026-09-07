@@ -34,6 +34,69 @@ type persistedMeetingSummaryContent struct {
 
 var _ biz.MeetingSummaryRepo = (*MeetingRepo)(nil)
 
+func (r *MeetingRepo) CompleteEmptyTranscriptSummary(ctx context.Context, userID string, summary *biz.MeetingSummary) (*biz.Meeting, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is required")
+	}
+	if err := summary.ValidateEmptyTranscriptFallback(); err != nil {
+		return nil, err
+	}
+	var output *biz.Meeting
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		meetingRow, err := lockMeeting(ctx, tx, userID, summary.MeetingID)
+		if err != nil {
+			return err
+		}
+		transcriptionStatus, err := biz.ParseMeetingTranscriptionStatus(meetingRow.TranscriptionStatus)
+		if err != nil {
+			return err
+		}
+		meetingStatus, err := biz.ParseMeetingStatus(meetingRow.Status)
+		if err != nil {
+			return err
+		}
+		summaryStatus, err := biz.ParseMeetingSummaryStatus(meetingRow.SummaryStatus)
+		if err != nil {
+			return err
+		}
+		if transcriptionStatus != biz.MeetingTranscriptionStatusSucceeded || meetingRow.TranscriptRevision != 0 {
+			return biz.ErrMeetingStateConflict
+		}
+		if meetingStatus == biz.MeetingStatusCompleted && summaryStatus == biz.MeetingSummaryStatusSucceeded &&
+			meetingRow.SummaryVersion == summary.Version && meetingRow.SummarySourceTranscriptRevision == 0 &&
+			meetingRow.SummaryProvider == summary.Provider && meetingRow.SummaryModelName == summary.ModelName &&
+			meetingRow.SummaryPromptVersion == summary.PromptVersion {
+			output, err = toBizMeeting(meetingRow)
+			return err
+		}
+		if meetingStatus != biz.MeetingStatusCompleted || summaryStatus != biz.MeetingSummaryStatusNotStarted || meetingRow.SummaryVersion != 0 {
+			return biz.ErrMeetingStateConflict
+		}
+		updates, err := meetingSummaryBizToUpdates(summary)
+		if err != nil {
+			return err
+		}
+		updates["status"] = biz.MeetingStatusCompleted.String()
+		updates["summary_status"] = biz.MeetingSummaryStatusSucceeded.String()
+		updates["summary_version"] = summary.Version
+		updates["summary_source_transcript_revision"] = int64(0)
+		updates["summary_idempotency_key"] = "automatic:empty-transcript"
+		updates["updated_at"] = summary.UpdatedAt
+		if err := tx.WithContext(ctx).Model(meetingRow).Updates(updates).Error; err != nil {
+			return err
+		}
+		if err := tx.WithContext(ctx).Where("id = ?", meetingRow.ID).Take(meetingRow).Error; err != nil {
+			return err
+		}
+		output, err = toBizMeeting(meetingRow)
+		return err
+	})
+	if err != nil {
+		return nil, mapMeetingDataError(err)
+	}
+	return output, nil
+}
+
 func (r *MeetingRepo) EnsureSummaryTask(ctx context.Context, meetingID, userID, idempotencyKey string, now time.Time) (*biz.MeetingSummaryTask, error) {
 	var task *biz.MeetingSummaryTask
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -227,7 +290,6 @@ func (r *MeetingRepo) CompleteSummary(ctx context.Context, command biz.CompleteM
 			return err
 		}
 		updates["summary_status"] = biz.MeetingSummaryStatusSucceeded.String()
-		updates["status"] = biz.MeetingStatusCompleted.String()
 		updates["updated_at"] = command.Summary.UpdatedAt
 		if err := tx.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
 			return err
@@ -276,7 +338,6 @@ func (r *MeetingRepo) FailSummary(ctx context.Context, command biz.FailMeetingSu
 			"summary_failure_reason": command.Reason.String(),
 			"summary_content":        json.RawMessage("{}"),
 			"summary_generated_at":   nil,
-			"status":                 biz.MeetingStatusPartiallyCompleted.String(),
 			"updated_at":             command.FailedAt,
 		}).Error
 	})

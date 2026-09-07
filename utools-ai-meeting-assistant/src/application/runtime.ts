@@ -22,7 +22,12 @@ let recordingRepository: RecordingRepository | undefined;
 const deviceIDStorageKey = "tiehu.meeting.device-id";
 
 export function getMeetingGateway(): Promise<MeetingGateway> {
-  gatewayPromise ??= createMeetingGateway();
+  gatewayPromise ??= createMeetingGateway().catch((error: unknown) => {
+    // A temporary network or uTools authentication failure must not poison all
+    // later retries for the lifetime of the renderer.
+    gatewayPromise = undefined;
+    throw error;
+  });
   return gatewayPromise;
 }
 
@@ -61,9 +66,17 @@ async function createMeetingGateway(): Promise<MeetingGateway> {
     throw new Error("请先使用邮箱登录");
   }
   const client = getApiClient();
-  const temporaryToken = await getDesktopBridge().getUserServerTemporaryToken();
   const authGateway = new UToolsAuthGateway(client);
-  await authGateway.exchangeTemporaryToken(temporaryToken.token, getOrCreateDeviceID());
+  const authenticate = async () => {
+    const temporaryToken = await withRuntimeTimeout(
+      getDesktopBridge().getUserServerTemporaryToken(),
+      10_000,
+      "获取 uTools 登录凭证超时",
+    );
+    await authGateway.exchangeTemporaryToken(temporaryToken.token, getOrCreateDeviceID());
+  };
+  await authenticate();
+  client.setUnauthorizedHandler(authenticate);
   return new HttpMeetingGateway(client);
 }
 
@@ -80,4 +93,20 @@ function getOrCreateDeviceID(): string {
   const created = crypto.randomUUID();
   window.localStorage.setItem(deviceIDStorageKey, created);
   return created;
+}
+
+function withRuntimeTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        globalThis.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        globalThis.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }

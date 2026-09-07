@@ -201,6 +201,9 @@ func (s *RealtimeTranscriptionService) Start(ctx context.Context, payload []byte
 	if err != nil {
 		return nil, nil, err
 	}
+	if claims == nil {
+		return nil, nil, kratoserrors.InternalServer("TRANSCRIPTION_TICKET_RESULT_INVALID", "transcription ticket result is invalid")
+	}
 	if err := validateRealtimeAudio(request.Audio, claims.Audio); err != nil {
 		return nil, nil, err
 	}
@@ -208,12 +211,18 @@ func (s *RealtimeTranscriptionService) Start(ctx context.Context, payload []byte
 	if err != nil {
 		return nil, nil, err
 	}
+	if stored == nil {
+		return nil, nil, kratoserrors.InternalServer("TRANSCRIPTION_SESSION_RESULT_INVALID", "transcription session result is invalid")
+	}
 	if stored.UserID != claims.UserID || int64(stored.GrantedAudioDuration.Duration()/time.Second) != claims.GrantedAudioSeconds {
 		return nil, nil, kratoserrors.Unauthorized("TRANSCRIPTION_TICKET_INVALID", "transcription session ticket constraints are invalid")
 	}
 	started, err := s.uc.Start(ctx, claims.SessionID, claims.MeetingID)
 	if err != nil {
 		return nil, nil, err
+	}
+	if started == nil {
+		return nil, nil, kratoserrors.InternalServer("TRANSCRIPTION_SESSION_RESULT_INVALID", "transcription session result is invalid")
 	}
 	session := &RealtimeSession{uc: s.uc, claims: *claims, spec: claims.Audio, replayWindow: s.replayWindow, lastACK: started.LastAudioSequence}
 	ready := &RealtimeSessionReady{
@@ -230,6 +239,10 @@ func (s *RealtimeSession) LastACKSequence() int64 { return s.lastACK }
 
 func (s *RealtimeSession) Events() (<-chan biz.TranscriptEvent, error) {
 	return s.uc.TranscriptEvents(s.claims.SessionID)
+}
+
+func (s *RealtimeSession) ReportUsage(ctx context.Context, observedAt time.Time) error {
+	return s.uc.ReportUsage(ctx, s.claims.SessionID, observedAt)
 }
 
 func (s *RealtimeSession) ParseControl(payload []byte) (*RealtimeControlMessage, error) {
@@ -336,6 +349,9 @@ func (s *RealtimeSession) Finish(ctx context.Context, reason RealtimeFinishReaso
 	finished, err := s.uc.Finish(ctx, s.claims.SessionID)
 	if err != nil {
 		return nil, err
+	}
+	if finished == nil {
+		return nil, kratoserrors.InternalServer("TRANSCRIPTION_SESSION_RESULT_INVALID", "transcription session result is invalid")
 	}
 	accepted, err := finished.AcceptedAudioDuration(s.spec)
 	if err != nil {

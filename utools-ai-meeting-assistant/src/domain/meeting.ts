@@ -74,7 +74,7 @@ export interface MeetingResult {
   meetingId: string;
   status: MeetingStatus;
   summary?: MeetingSummary;
-	summaryStatus?: MeetingSummaryStatus;
+  summaryStatus?: MeetingSummaryStatus;
 }
 
 export interface MeetingQuota {
@@ -107,7 +107,7 @@ export function canStartMeeting(phase: ClientMeetingPhase): boolean {
 }
 
 export function canStopMeeting(phase: ClientMeetingPhase): boolean {
-  return phase === "recording";
+  return phase === "starting" || phase === "recording";
 }
 
 export function requiresMeetingCleanup(phase: ClientMeetingPhase): boolean {

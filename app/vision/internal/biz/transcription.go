@@ -421,11 +421,12 @@ type TranscriptionSessionRepo interface {
 	Complete(context.Context, string, []TranscriptSegment) (*TranscriptionSession, error)
 }
 
-// StalePendingTranscriptionRepo is the cleanup capability implemented by the
-// PostgreSQL adapter. It is separate from the command repository so in-memory
-// test doubles and alternate adapters do not need an unused listing method.
-type StalePendingTranscriptionRepo interface {
-	ListStalePending(context.Context, time.Time, int) ([]*TranscriptionSession, error)
+// StaleTranscriptionRepo is the recovery capability implemented by durable
+// adapters. ExpireStale performs a conditional transition so a reaper cannot
+// expire a session that received audio after it was listed.
+type StaleTranscriptionRepo interface {
+	ListStaleNonTerminal(context.Context, time.Time, int) ([]*TranscriptionSession, error)
+	ExpireStale(context.Context, string, time.Time) (*TranscriptionSession, bool, error)
 }
 
 type TranscriptionTicketRepo interface {
@@ -456,7 +457,7 @@ type FinalTranscriptSink interface {
 }
 
 type TranscriptionUsageSink interface {
-	ReportTranscriptionUsage(context.Context, *TranscriptionSession, time.Duration) error
+	ReportTranscriptionUsage(context.Context, *TranscriptionSession, time.Duration, time.Time) error
 }
 
 type TranscriptionPolicy struct {
@@ -839,16 +840,37 @@ func (uc *TranscriptionUsecase) Finish(ctx context.Context, sessionID string) (*
 			return completed, kratoserrors.ServiceUnavailable("FINAL_TRANSCRIPT_DELIVERY_PENDING", "final transcript delivery is pending retry").WithCause(err)
 		}
 	}
-	if uc.usageSink != nil {
-		accepted, durationErr := completed.AcceptedAudioDuration(uc.policy.Audio)
-		if durationErr != nil {
-			return completed, kratoserrors.InternalServer("TRANSCRIPTION_USAGE_INVALID", "transcription usage is invalid").WithCause(durationErr)
-		}
-		if err := uc.usageSink.ReportTranscriptionUsage(ctx, completed, accepted.Duration()); err != nil {
-			return completed, kratoserrors.ServiceUnavailable("TRANSCRIPTION_USAGE_DELIVERY_PENDING", "transcription usage delivery is pending retry").WithCause(err)
-		}
-	}
 	return completed, nil
+}
+
+// ReportUsage sends a cumulative heartbeat to Core. Terminal delivery remains
+// owned by the transactional outbox, so a temporary Core failure never blocks
+// ASR completion.
+func (uc *TranscriptionUsecase) ReportUsage(ctx context.Context, sessionID string, observedAt time.Time) error {
+	if ctx == nil {
+		return kratoserrors.BadRequest("CONTEXT_REQUIRED", "context is required")
+	}
+	if _, err := uuid.Parse(sessionID); err != nil {
+		return kratoserrors.BadRequest("TRANSCRIPTION_SESSION_ID_INVALID", "session_id must be a UUID")
+	}
+	if observedAt.IsZero() {
+		return kratoserrors.BadRequest("TRANSCRIPTION_USAGE_TIME_INVALID", "usage observation time is required")
+	}
+	if uc.usageSink == nil {
+		return kratoserrors.InternalServer("TRANSCRIPTION_USAGE_SINK_UNAVAILABLE", "transcription usage reporting is unavailable")
+	}
+	session, err := uc.repo.Get(ctx, sessionID, "")
+	if err != nil {
+		return mapTranscriptionRepoError(err)
+	}
+	accepted, err := session.AcceptedAudioDuration(uc.policy.Audio)
+	if err != nil {
+		return kratoserrors.InternalServer("TRANSCRIPTION_USAGE_INVALID", "transcription usage is invalid").WithCause(err)
+	}
+	if err := uc.usageSink.ReportTranscriptionUsage(ctx, session, accepted.Duration(), observedAt.UTC()); err != nil {
+		return kratoserrors.ServiceUnavailable("TRANSCRIPTION_USAGE_DELIVERY_FAILED", "transcription usage could not be reported").WithCause(err)
+	}
+	return nil
 }
 
 func (uc *TranscriptionUsecase) Cancel(ctx context.Context, sessionID, meetingID string) (*TranscriptionSession, error) {
@@ -908,21 +930,21 @@ func (uc *TranscriptionUsecase) Expire(ctx context.Context, sessionID string) (*
 	return expired, nil
 }
 
-// ExpireStalePending expires sessions whose one-time ticket has already had
-// enough time to be consumed. The conditional transition prevents a reaper
-// racing with a WebSocket start from terminating a streaming session.
-func (uc *TranscriptionUsecase) ExpireStalePending(ctx context.Context, before time.Time, limit int) (int, error) {
+// ExpireStaleSessions recovers every non-terminal session abandoned by a
+// disconnected client or process restart. The repository rechecks UpdatedAt
+// under a row lock before changing durable state.
+func (uc *TranscriptionUsecase) ExpireStaleSessions(ctx context.Context, before time.Time, limit int) (int, error) {
 	if ctx == nil {
 		return 0, kratoserrors.BadRequest("CONTEXT_REQUIRED", "context is required")
 	}
 	if before.IsZero() || limit <= 0 || limit > 1_000 {
 		return 0, kratoserrors.BadRequest("TRANSCRIPTION_REAP_INPUT_INVALID", "transcription cleanup input is invalid")
 	}
-	repo, ok := uc.repo.(StalePendingTranscriptionRepo)
+	repo, ok := uc.repo.(StaleTranscriptionRepo)
 	if !ok {
 		return 0, kratoserrors.InternalServer("TRANSCRIPTION_REAP_UNAVAILABLE", "transcription cleanup repository is unavailable")
 	}
-	sessions, err := repo.ListStalePending(ctx, before.UTC(), limit)
+	sessions, err := repo.ListStaleNonTerminal(ctx, before.UTC(), limit)
 	if err != nil {
 		return 0, mapTranscriptionRepoError(err)
 	}
@@ -931,16 +953,31 @@ func (uc *TranscriptionUsecase) ExpireStalePending(ctx context.Context, before t
 		if session == nil {
 			return expiredCount, kratoserrors.InternalServer("TRANSCRIPTION_SESSION_INVALID", "transcription cleanup returned invalid session data")
 		}
-		_, err := uc.repo.Transition(ctx, session.ID, []TranscriptionSessionStatus{TranscriptionSessionStatusPending}, TranscriptionSessionStatusExpired, "")
-		if stderrors.Is(err, ErrTranscriptionStateConflict) {
+		runtime := uc.getActive(session.ID)
+		if runtime != nil {
+			runtime.mu.Lock()
+		}
+		_, expired, expireErr := repo.ExpireStale(ctx, session.ID, before.UTC())
+		var cancelErr error
+		if expireErr == nil && expired && runtime != nil {
+			cancelErr = runtime.session.Cancel(ctx)
+		}
+		if runtime != nil {
+			runtime.mu.Unlock()
+		}
+		if expireErr != nil {
+			return expiredCount, mapTranscriptionRepoError(expireErr)
+		}
+		if !expired {
 			continue
 		}
-		if err != nil {
-			return expiredCount, mapTranscriptionRepoError(err)
-		}
-		// These sessions are older than their ticket TTL. Redis expiry is the
-		// authoritative ticket cleanup, so no second mutable operation is needed.
+		uc.removeActive(session.ID)
+		// Redis expiry is the authoritative cleanup for tickets older than the
+		// configured stale threshold; no second mutable operation is required.
 		expiredCount++
+		if cancelErr != nil && !stderrors.Is(cancelErr, context.Canceled) {
+			return expiredCount, kratoserrors.ServiceUnavailable("ASR_CANCEL_FAILED", "stale ASR session could not be cancelled").WithCause(cancelErr)
+		}
 	}
 	return expiredCount, nil
 }

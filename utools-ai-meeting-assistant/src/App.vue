@@ -29,7 +29,6 @@ const {
   quota,
   quotaLoading,
   quotaError,
-  retainAudio,
   captureSystemAudio,
   captureMicrophone,
   systemAudioLevel,
@@ -119,7 +118,6 @@ onBeforeUnmount(() => meeting.disposeRuntime());
 
     <div v-if="!browserAuthenticationRequired || authenticatedNickname" class="dashboard-grid">
       <MeetingControls
-        v-model:retain-audio="retainAudio"
         v-model:capture-system-audio="captureSystemAudio"
         v-model:capture-microphone="captureMicrophone"
         v-model:transcription-consent="transcriptionConsent"
@@ -169,7 +167,7 @@ onBeforeUnmount(() => meeting.disposeRuntime());
     <footer>
       <span>音频传输受加密连接保护</span>
       <span>·</span>
-      <span>你可以随时删除云端会议数据</span>
+      <span>本地录音由你管理，可随时删除</span>
     </footer>
   </main>
 </template>

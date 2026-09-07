@@ -753,8 +753,13 @@ type RealtimeTranscription struct {
 	MaxConnections   int32                  `protobuf:"varint,10,opt,name=max_connections,json=maxConnections,proto3" json:"max_connections,omitempty"`
 	// allow_insecure_loopback permits ws:// only for localhost development.
 	AllowInsecureLoopback bool `protobuf:"varint,11,opt,name=allow_insecure_loopback,json=allowInsecureLoopback,proto3" json:"allow_insecure_loopback,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// usage_report_interval controls cumulative usage heartbeats sent to Core.
+	UsageReportInterval *durationpb.Duration `protobuf:"bytes,12,opt,name=usage_report_interval,json=usageReportInterval,proto3" json:"usage_report_interval,omitempty"`
+	// stale_session_timeout bounds recovery of non-terminal sessions after a
+	// renderer, network, or Vision process disappears.
+	StaleSessionTimeout *durationpb.Duration `protobuf:"bytes,13,opt,name=stale_session_timeout,json=staleSessionTimeout,proto3" json:"stale_session_timeout,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *RealtimeTranscription) Reset() {
@@ -862,6 +867,20 @@ func (x *RealtimeTranscription) GetAllowInsecureLoopback() bool {
 		return x.AllowInsecureLoopback
 	}
 	return false
+}
+
+func (x *RealtimeTranscription) GetUsageReportInterval() *durationpb.Duration {
+	if x != nil {
+		return x.UsageReportInterval
+	}
+	return nil
+}
+
+func (x *RealtimeTranscription) GetStaleSessionTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.StaleSessionTimeout
+	}
+	return nil
 }
 
 type Auth struct {
@@ -1641,7 +1660,7 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\fmax_attempts\x18\x04 \x01(\x05R\vmaxAttempts\x12B\n" +
 	"\x0finitial_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0einitialBackoff\x12:\n" +
 	"\vmax_backoff\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\n" +
-	"maxBackoff\"\xde\x04\n" +
+	"maxBackoff\"\xfc\x05\n" +
 	"\x15RealtimeTranscription\x12#\n" +
 	"\rwebsocket_url\x18\x01 \x01(\tR\fwebsocketUrl\x128\n" +
 	"\n" +
@@ -1655,7 +1674,9 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\x11max_message_bytes\x18\t \x01(\x03R\x0fmaxMessageBytes\x12'\n" +
 	"\x0fmax_connections\x18\n" +
 	" \x01(\x05R\x0emaxConnections\x126\n" +
-	"\x17allow_insecure_loopback\x18\v \x01(\bR\x15allowInsecureLoopback\"\x92\x01\n" +
+	"\x17allow_insecure_loopback\x18\v \x01(\bR\x15allowInsecureLoopback\x12M\n" +
+	"\x15usage_report_interval\x18\f \x01(\v2\x19.google.protobuf.DurationR\x13usageReportInterval\x12M\n" +
+	"\x15stale_session_timeout\x18\r \x01(\v2\x19.google.protobuf.DurationR\x13staleSessionTimeout\"\x92\x01\n" +
 	"\x04Auth\x12C\n" +
 	"\x10access_token_ttl\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x0eaccessTokenTtl\x12E\n" +
 	"\x11refresh_token_ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0frefreshTokenTtl\"\x8f\x02\n" +
@@ -1784,30 +1805,32 @@ var file_conf_conf_proto_depIdxs = []int32{
 	20, // 30: conf.RealtimeTranscription.handshake_timeout:type_name -> google.protobuf.Duration
 	20, // 31: conf.RealtimeTranscription.idle_timeout:type_name -> google.protobuf.Duration
 	20, // 32: conf.RealtimeTranscription.write_timeout:type_name -> google.protobuf.Duration
-	20, // 33: conf.Auth.access_token_ttl:type_name -> google.protobuf.Duration
-	20, // 34: conf.Auth.refresh_token_ttl:type_name -> google.protobuf.Duration
-	20, // 35: conf.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
-	20, // 36: conf.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
-	20, // 37: conf.Redis.dial_timeout:type_name -> google.protobuf.Duration
-	20, // 38: conf.Redis.read_timeout:type_name -> google.protobuf.Duration
-	20, // 39: conf.Redis.write_timeout:type_name -> google.protobuf.Duration
-	20, // 40: conf.ASR.session_timeout:type_name -> google.protobuf.Duration
-	20, // 41: conf.ASR.connect_timeout:type_name -> google.protobuf.Duration
-	20, // 42: conf.ASR.read_timeout:type_name -> google.protobuf.Duration
-	20, // 43: conf.ASR.write_timeout:type_name -> google.protobuf.Duration
-	20, // 44: conf.ASR.finish_timeout:type_name -> google.protobuf.Duration
-	14, // 45: conf.ASR.bailian:type_name -> conf.BailianParaformer
-	15, // 46: conf.ASR.startup_probe:type_name -> conf.ASRStartupProbe
-	20, // 47: conf.ASRStartupProbe.timeout:type_name -> google.protobuf.Duration
-	18, // 48: conf.Server.http:type_name -> conf.Server.HTTP
-	19, // 49: conf.Server.grpc:type_name -> conf.Server.GRPC
-	20, // 50: conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	20, // 51: conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	52, // [52:52] is the sub-list for method output_type
-	52, // [52:52] is the sub-list for method input_type
-	52, // [52:52] is the sub-list for extension type_name
-	52, // [52:52] is the sub-list for extension extendee
-	0,  // [0:52] is the sub-list for field type_name
+	20, // 33: conf.RealtimeTranscription.usage_report_interval:type_name -> google.protobuf.Duration
+	20, // 34: conf.RealtimeTranscription.stale_session_timeout:type_name -> google.protobuf.Duration
+	20, // 35: conf.Auth.access_token_ttl:type_name -> google.protobuf.Duration
+	20, // 36: conf.Auth.refresh_token_ttl:type_name -> google.protobuf.Duration
+	20, // 37: conf.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
+	20, // 38: conf.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
+	20, // 39: conf.Redis.dial_timeout:type_name -> google.protobuf.Duration
+	20, // 40: conf.Redis.read_timeout:type_name -> google.protobuf.Duration
+	20, // 41: conf.Redis.write_timeout:type_name -> google.protobuf.Duration
+	20, // 42: conf.ASR.session_timeout:type_name -> google.protobuf.Duration
+	20, // 43: conf.ASR.connect_timeout:type_name -> google.protobuf.Duration
+	20, // 44: conf.ASR.read_timeout:type_name -> google.protobuf.Duration
+	20, // 45: conf.ASR.write_timeout:type_name -> google.protobuf.Duration
+	20, // 46: conf.ASR.finish_timeout:type_name -> google.protobuf.Duration
+	14, // 47: conf.ASR.bailian:type_name -> conf.BailianParaformer
+	15, // 48: conf.ASR.startup_probe:type_name -> conf.ASRStartupProbe
+	20, // 49: conf.ASRStartupProbe.timeout:type_name -> google.protobuf.Duration
+	18, // 50: conf.Server.http:type_name -> conf.Server.HTTP
+	19, // 51: conf.Server.grpc:type_name -> conf.Server.GRPC
+	20, // 52: conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	20, // 53: conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	54, // [54:54] is the sub-list for method output_type
+	54, // [54:54] is the sub-list for method input_type
+	54, // [54:54] is the sub-list for extension type_name
+	54, // [54:54] is the sub-list for extension extendee
+	0,  // [0:54] is the sub-list for field type_name
 }
 
 func init() { file_conf_conf_proto_init() }

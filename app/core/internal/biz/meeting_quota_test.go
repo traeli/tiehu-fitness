@@ -16,6 +16,7 @@ type quotaFakeRepo struct {
 	reservation    *MeetingUsageReservation
 	snapshot       *MeetingQuotaSnapshot
 	reportErr      error
+	reportInput    MeetingQuotaReportInput
 	finalizeErr    error
 	finalizeInput  MeetingQuotaFinalizeInput
 	snapshotPolicy MeetingQuotaPolicy
@@ -28,11 +29,13 @@ func (r *quotaFakeRepo) GetDefaultPolicy(context.Context) (MeetingQuotaPolicy, e
 	return r.defaultPolicy, nil
 }
 
-func (r *quotaFakeRepo) ReportUsage(_ context.Context, _, _ string, total int64, _ time.Time) (*MeetingUsageReservation, error) {
+func (r *quotaFakeRepo) ReportUsage(_ context.Context, input MeetingQuotaReportInput) (*MeetingUsageReservation, error) {
+	r.reportInput = input
 	if r.reportErr != nil {
 		return nil, r.reportErr
 	}
-	r.reservation.ReportedSeconds = total
+	r.reservation.ReportedSeconds = input.TotalSeconds
+	r.reservation.ExpiresAt = input.ExpiresAt
 	return r.reservation, nil
 }
 
@@ -306,7 +309,11 @@ func TestRoundMeetingAudioUsage(t *testing.T) {
 
 func TestMeetingQuotaUsecaseRoundsReportsAndFinalizationToMinutes(t *testing.T) {
 	reservationID, meetingID := uuid.NewString(), uuid.NewString()
-	repo := &quotaFakeRepo{reservation: &MeetingUsageReservation{ID: reservationID, MeetingID: meetingID}}
+	policy, err := NewMeetingQuotaPolicy(validMeetingQuotaConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := &quotaFakeRepo{defaultPolicy: policy, reservation: &MeetingUsageReservation{ID: reservationID, MeetingID: meetingID}}
 	uc, err := NewMeetingQuotaUsecase(repo, repo, &quotaFakeRateLimiter{})
 	if err != nil {
 		t.Fatal(err)
@@ -315,6 +322,9 @@ func TestMeetingQuotaUsecaseRoundsReportsAndFinalizationToMinutes(t *testing.T) 
 	reported, err := uc.ReportUsage(context.Background(), reservationID, meetingID, 1, time.Now())
 	if err != nil || reported.ReportedSeconds != 60 {
 		t.Fatalf("ReportUsage() = (%#v, %v), want 60 seconds", reported, err)
+	}
+	if !repo.reportInput.ExpiresAt.Equal(repo.reportInput.ObservedAt.Add(policy.ReservationTTL)) {
+		t.Fatalf("usage lease expiry = %s, want observed_at + %s", repo.reportInput.ExpiresAt, policy.ReservationTTL)
 	}
 	_, err = uc.Finalize(context.Background(), MeetingUsageFinalizeCommand{
 		ReservationID:        reservationID,

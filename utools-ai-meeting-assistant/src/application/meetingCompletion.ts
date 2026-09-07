@@ -1,4 +1,5 @@
 import type { MeetingResult } from "@/domain/meeting";
+import { ApiError } from "@/infrastructure/api/apiClient";
 import type { MeetingGateway } from "@/infrastructure/api/meetingGateway";
 
 const defaultTimeoutMs = 30_000;
@@ -43,6 +44,7 @@ export async function waitForMeetingCompletion(
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? delay;
   const deadline = now() + timeoutMs;
+  let lastRequestError: unknown;
 
   while (now() < deadline) {
     const remainingMs = deadline - now();
@@ -51,16 +53,27 @@ export async function waitForMeetingCompletion(
     try {
       current = await gateway.getMeeting(initial.meetingId, signal);
     } catch (error) {
-      throw new MeetingCompletionError("查询会议处理结果失败，已停止等待。", {
-        cause: error,
-      });
+      if (!isRetryablePollingError(error)) {
+        throw new MeetingCompletionError("查询会议处理结果失败，已停止等待。", {
+          cause: error,
+        });
+      }
+      lastRequestError = error;
+      await sleep(Math.min(pollIntervalMs, Math.max(1, deadline - now())));
+      continue;
     }
     if (current.status !== "processing") {
       return requireSuccessfulTerminal(current);
     }
     await sleep(Math.min(pollIntervalMs, Math.max(1, deadline - now())));
   }
-  throw new MeetingCompletionError("会议处理超时，已停止等待。请稍后查询会议状态。");
+  throw new MeetingCompletionError("会议处理超时，已停止等待。请稍后查询会议状态。", {
+    cause: lastRequestError,
+  });
+}
+
+function isRetryablePollingError(error: unknown): boolean {
+  return !(error instanceof ApiError) || error.status >= 500 || error.status === 408 || error.status === 429;
 }
 
 function requireSuccessfulTerminal(result: MeetingResult): MeetingResult {

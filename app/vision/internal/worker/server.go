@@ -2,22 +2,31 @@ package worker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/debug"
 	"sync"
 	"time"
-
-	"github.com/tiehu-ai/tiehu-fitness/app/vision/internal/biz"
 )
 
-// Server owns the bounded transcription outbox polling lifecycle.
+const (
+	transcriptionBatchTimeout = 30 * time.Second
+	summaryBatchTimeout       = 5 * time.Minute
+)
+
+type batchProcessor interface {
+	ProcessBatch(context.Context, time.Time) (int, error)
+}
+
+// Server owns independent bounded loops for reliable transcription delivery
+// and slower LLM summary work. Keeping the loops separate prevents a model
+// request from delaying a meeting's terminal notification to Core.
 type Server struct {
-	uc           *biz.TranscriptionOutboxUsecase
-	summaryUC    *biz.MeetingSummaryUsecase
-	pollInterval time.Duration
-	logger       *slog.Logger
+	transcription             batchProcessor
+	transcriptionPollInterval time.Duration
+	summary                   batchProcessor
+	summaryPollInterval       time.Duration
+	logger                    *slog.Logger
 
 	lifecycleMu sync.Mutex
 	cancel      context.CancelFunc
@@ -26,18 +35,27 @@ type Server struct {
 	stopped     bool
 }
 
-func NewServer(uc *biz.TranscriptionOutboxUsecase, pollInterval time.Duration, logger *slog.Logger, summaryUC ...*biz.MeetingSummaryUsecase) (*Server, error) {
-	if uc == nil || pollInterval <= 0 || pollInterval > time.Minute {
+func NewServer(
+	transcription batchProcessor,
+	transcriptionPollInterval time.Duration,
+	summary batchProcessor,
+	summaryPollInterval time.Duration,
+	logger *slog.Logger,
+) (*Server, error) {
+	if transcription == nil || transcriptionPollInterval <= 0 || transcriptionPollInterval > time.Minute {
 		return nil, fmt.Errorf("vision outbox worker configuration is invalid")
+	}
+	if summary != nil && (summaryPollInterval <= 0 || summaryPollInterval > time.Minute) {
+		return nil, fmt.Errorf("vision summary worker configuration is invalid")
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-	server := &Server{uc: uc, pollInterval: pollInterval, logger: logger, done: make(chan struct{})}
-	if len(summaryUC) > 0 {
-		server.summaryUC = summaryUC[0]
-	}
-	return server, nil
+	return &Server{
+		transcription: transcription, transcriptionPollInterval: transcriptionPollInterval,
+		summary: summary, summaryPollInterval: summaryPollInterval,
+		logger: logger, done: make(chan struct{}),
+	}, nil
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -62,27 +80,22 @@ func (s *Server) Start(ctx context.Context) error {
 		close(s.done)
 	}()
 
-	s.logger.Info("vision transcription outbox worker started", "poll_interval", s.pollInterval)
-	ticker := time.NewTicker(s.pollInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-runCtx.Done():
-			return nil
-		default:
-		}
-		if _, err := s.runBatch(runCtx); err != nil {
-			if runCtx.Err() != nil {
-				return nil
-			}
-			s.logger.Error("process transcription outbox batch", "error", err)
-		}
-		select {
-		case <-runCtx.Done():
-			return nil
-		case <-ticker.C:
-		}
+	var loops sync.WaitGroup
+	loops.Add(1)
+	go func() {
+		defer loops.Done()
+		s.runLoop(runCtx, "transcription outbox", s.transcription, s.transcriptionPollInterval, transcriptionBatchTimeout)
+	}()
+	if s.summary != nil {
+		loops.Add(1)
+		go func() {
+			defer loops.Done()
+			s.runLoop(runCtx, "meeting summary", s.summary, s.summaryPollInterval, summaryBatchTimeout)
+		}()
 	}
+	<-runCtx.Done()
+	loops.Wait()
+	return nil
 }
 
 func (s *Server) Stop(ctx context.Context) error {
@@ -109,21 +122,39 @@ func (s *Server) Stop(ctx context.Context) error {
 	}
 }
 
-func (s *Server) runBatch(ctx context.Context) (delivered int, err error) {
+func (s *Server) runLoop(ctx context.Context, name string, processor batchProcessor, pollInterval, batchTimeout time.Duration) {
+	s.logger.Info("vision worker loop started", "worker", name, "poll_interval", pollInterval)
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		processed, err := s.runBatch(ctx, name, processor, batchTimeout)
+		if processed > 0 {
+			s.logger.Info("vision worker batch completed", "worker", name, "processed", processed)
+		}
+		if err != nil && ctx.Err() == nil {
+			s.logger.Error("process vision worker batch", "worker", name, "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Server) runBatch(ctx context.Context, name string, processor batchProcessor, timeout time.Duration) (processed int, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			s.logger.Error("transcription outbox worker panic", "panic", recovered, "stack", string(debug.Stack()))
-			err = fmt.Errorf("transcription outbox worker panic: %v", recovered)
+			s.logger.Error("vision worker panic", "worker", name, "panic", recovered, "stack", string(debug.Stack()))
+			err = fmt.Errorf("%s worker panic: %v", name, recovered)
 		}
 	}()
-	now := time.Now().UTC()
-	delivered, transcriptionErr := s.uc.ProcessBatch(ctx, now)
-	if delivered > 0 {
-		s.logger.Info("vision transcription outbox batch delivered", "deliveries", delivered)
-	}
-	if s.summaryUC == nil {
-		return delivered, transcriptionErr
-	}
-	summarized, summaryErr := s.summaryUC.ProcessBatch(ctx, now)
-	return delivered + summarized, errors.Join(transcriptionErr, summaryErr)
+	batchCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return processor.ProcessBatch(batchCtx, time.Now().UTC())
 }

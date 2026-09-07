@@ -22,7 +22,6 @@ const props = defineProps<{
   quotaError?: string;
 }>();
 
-const retainAudio = defineModel<boolean>("retainAudio", { required: true });
 const captureSystemAudio = defineModel<boolean>("captureSystemAudio", { required: true });
 const captureMicrophone = defineModel<boolean>("captureMicrophone", { required: true });
 const transcriptionConsent = defineModel<boolean>("transcriptionConsent", { required: true });
@@ -41,6 +40,7 @@ const quotaExhausted = computed(() =>
   props.quota ? getDisplayRemainingQuotaSeconds(props.quota) === 0 : false,
 );
 const anotherMeetingActive = computed(() => (props.quota?.activeMeetings ?? 0) > 0);
+const quotaUnavailable = computed(() => props.quota === undefined);
 
 defineEmits<{
   start: [];
@@ -119,28 +119,22 @@ function toMeterPercent(peak: number): number {
           <small>与电脑系统音频混音，记录你自己的发言</small>
         </span>
       </label>
-      <label class="option-row">
-        <input v-model="retainAudio" type="checkbox" :disabled="!canStart" />
-        <span>
-          <strong>保留云端录音</strong>
-          <small>关闭时仅临时传输给 ASR，处理后删除原始音频</small>
-        </span>
-      </label>
     </div>
 
     <button
       v-if="canStart"
       class="primary-button"
       type="button"
-      :disabled="!transcriptionConsent || !captureSourceSelected || quotaExhausted || anotherMeetingActive"
+      :disabled="!transcriptionConsent || !captureSourceSelected || quotaUnavailable || quotaExhausted || anotherMeetingActive"
       @click="$emit('start')"
     >
-      <template v-if="anotherMeetingActive">上一场会议正在结束</template>
+      <template v-if="quotaUnavailable">{{ quotaLoading ? "正在加载额度" : "额度暂不可用" }}</template>
+      <template v-else-if="anotherMeetingActive">上一场会议正在结束</template>
       <template v-else-if="quotaExhausted">本月额度已用完</template>
       <template v-else><span class="button-icon">●</span> 开始会议</template>
     </button>
     <button v-else-if="canStop" class="stop-button" type="button" @click="$emit('stop')">
-      <span class="stop-icon"></span> 停止会议
+      <span class="stop-icon"></span> {{ isRecording ? "停止会议" : "取消启动" }}
     </button>
     <button v-else class="stop-button" type="button" disabled>
       {{ statusText }}

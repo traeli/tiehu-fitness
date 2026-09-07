@@ -24,12 +24,14 @@ import (
 const normalWebSocketClosure = 1000
 
 type realtimeWebSocketConfig struct {
-	handshakeTimeout time.Duration
-	idleTimeout      time.Duration
-	writeTimeout     time.Duration
-	maxMessageBytes  int64
-	queueCapacity    int
-	allowedOrigins   []string
+	handshakeTimeout    time.Duration
+	idleTimeout         time.Duration
+	writeTimeout        time.Duration
+	usageReportInterval time.Duration
+	staleSessionTimeout time.Duration
+	maxMessageBytes     int64
+	queueCapacity       int
+	allowedOrigins      []string
 }
 
 type RealtimeWebSocketHandler struct {
@@ -232,6 +234,8 @@ func (h *RealtimeWebSocketHandler) Handle(httpContext kratoshttp.Context) (handl
 	readCtx, stopRead := context.WithCancel(connectionCtx)
 	defer stopRead()
 	go h.readLoop(readCtx, conn, inbound)
+	usageTicker := time.NewTicker(h.cfg.usageReportInterval)
+	defer usageTicker.Stop()
 
 	var finalSequence int64
 	var finishing bool
@@ -290,6 +294,11 @@ func (h *RealtimeWebSocketHandler) Handle(httpContext kratoshttp.Context) (handl
 				_ = h.writeJSON(conn, service.RealtimeErrorFrom(service.RealtimeProtocolViolation("websocket message type is unsupported"), realtimeSession.LastACKSequence()))
 				h.cancelDisconnected(connectionCtx, realtimeSession)
 				return nil
+			}
+		case observedAt := <-usageTicker.C:
+			if err := realtimeSession.ReportUsage(connectionCtx, observedAt.UTC()); err != nil {
+				h.logger.Warn("report realtime transcription usage heartbeat",
+					"connection_id", connectionID, "session_id", realtimeSession.SessionID(), "error", err)
 			}
 		case event, ok := <-events:
 			if !ok {
@@ -464,14 +473,21 @@ func (h *RealtimeWebSocketHandler) originAllowed(origin string) bool {
 }
 
 func validateRealtimeWebSocketConfig(cfg *conf.RealtimeTranscription) (realtimeWebSocketConfig, error) {
-	if cfg.GetHandshakeTimeout() == nil || cfg.GetIdleTimeout() == nil || cfg.GetWriteTimeout() == nil {
+	if cfg.GetHandshakeTimeout() == nil || cfg.GetIdleTimeout() == nil || cfg.GetWriteTimeout() == nil ||
+		cfg.GetUsageReportInterval() == nil || cfg.GetStaleSessionTimeout() == nil {
 		return realtimeWebSocketConfig{}, fmt.Errorf("realtime websocket timeouts are required")
 	}
 	handshake := cfg.GetHandshakeTimeout().AsDuration()
 	idle := cfg.GetIdleTimeout().AsDuration()
 	write := cfg.GetWriteTimeout().AsDuration()
+	usageReport := cfg.GetUsageReportInterval().AsDuration()
+	staleSession := cfg.GetStaleSessionTimeout().AsDuration()
 	if handshake <= 0 || handshake > 30*time.Second || idle <= 0 || idle > 5*time.Minute || write <= 0 || write > 30*time.Second {
 		return realtimeWebSocketConfig{}, fmt.Errorf("realtime websocket timeouts are out of range")
+	}
+	if usageReport < 5*time.Second || usageReport > time.Minute || staleSession <= idle ||
+		staleSession < 2*usageReport || staleSession > 10*time.Minute {
+		return realtimeWebSocketConfig{}, fmt.Errorf("realtime websocket heartbeat or stale-session timeout is out of range")
 	}
 	if cfg.GetMaxMessageBytes() < 1024 || cfg.GetMaxMessageBytes() > 1<<20 {
 		return realtimeWebSocketConfig{}, fmt.Errorf("realtime websocket max_message_bytes must be between 1024 and 1048576")
@@ -490,6 +506,7 @@ func validateRealtimeWebSocketConfig(cfg *conf.RealtimeTranscription) (realtimeW
 	}
 	return realtimeWebSocketConfig{
 		handshakeTimeout: handshake, idleTimeout: idle, writeTimeout: write,
+		usageReportInterval: usageReport, staleSessionTimeout: staleSession,
 		maxMessageBytes: cfg.GetMaxMessageBytes(), queueCapacity: int(cfg.GetMaxQueueChunks()),
 		allowedOrigins: append([]string(nil), allowed...),
 	}, nil

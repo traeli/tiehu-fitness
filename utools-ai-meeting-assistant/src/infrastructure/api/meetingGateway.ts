@@ -440,9 +440,13 @@ function parseMeetingSummaryResponse(value: unknown): MeetingSummaryResult {
   }
   const status = parseMeetingSummaryStatus(readField(value, "status", "status"));
   const rawSummary = readField(value, "summary", "summary");
+  const summary = rawSummary === undefined || rawSummary === null ? undefined : parseSummary(rawSummary);
+  if (status === "succeeded" && summary === undefined) {
+    throw new Error("Succeeded meeting summary response is missing summary content");
+  }
   return {
     status,
-    summary: rawSummary === undefined || rawSummary === null ? undefined : parseSummary(rawSummary),
+    summary,
     failureReason: optionalString(
       readField(value, "failureReason", "failure_reason"),
       "failureReason",

@@ -14,6 +14,7 @@ import {
   toMeetingError,
   type MeetingErrorInfo,
 } from "@/application/meetingError";
+import { nextSummaryPollDelay } from "@/application/summaryPolling";
 import { renderSummaryMarkdown } from "@/application/summaryMarkdown";
 import { appConfig } from "@/config";
 import {
@@ -41,6 +42,9 @@ import {
 } from "@/infrastructure/realtime/transcriptionClient";
 import type { LocalMeetingRecording } from "@/infrastructure/recording/recordingRepository";
 
+const recordingDetailTimeoutMs = 20_000;
+const recordingSummaryTrackingTimeoutMs = 120_000;
+
 export const useMeetingStore = defineStore("meeting", () => {
   const phase = ref<ClientMeetingPhase>("idle");
   const session = ref<MeetingSession>();
@@ -51,7 +55,8 @@ export const useMeetingStore = defineStore("meeting", () => {
   const quota = ref<MeetingQuota>();
   const quotaLoading = ref(false);
   const quotaError = ref<string>();
-  const retainAudio = ref(false);
+  const startOperationPending = ref(false);
+  const stopOperationPending = ref(false);
   const captureSystemAudio = ref(window.meetingDesktop !== undefined);
   const captureMicrophone = ref(true);
   const systemAudioLevel = ref(0);
@@ -82,13 +87,17 @@ export const useMeetingStore = defineStore("meeting", () => {
   let unsubscribeLifecycle: (() => void) | undefined;
   let recordingSelectionVersion = 0;
   let recordingSummaryPollTimer: number | undefined;
+  let currentSummaryTrackingVersion = 0;
+  let quotaRecoveryTimer: number | undefined;
   let quotaRefreshVersion = 0;
   let startOperationVersion = 0;
   let stopIdempotencyKey: string | undefined;
   let lifecycleCleanupPromise: Promise<void> | undefined;
   let pageHideListenerInstalled = false;
 
-  const canStart = computed(() => canStartMeeting(phase.value));
+  const canStart = computed(
+    () => canStartMeeting(phase.value) && !startOperationPending.value && !stopOperationPending.value,
+  );
   const canStop = computed(() => canStopMeeting(phase.value));
   const statusText = computed(() => {
     if (phase.value === "starting" && connectionState.value === "connecting") {
@@ -118,6 +127,7 @@ export const useMeetingStore = defineStore("meeting", () => {
   }
 
   function disposeRuntime(): void {
+    currentSummaryTrackingVersion += 1;
     unsubscribeLifecycle?.();
     unsubscribeLifecycle = undefined;
     if (pageHideListenerInstalled) {
@@ -125,6 +135,7 @@ export const useMeetingStore = defineStore("meeting", () => {
       pageHideListenerInstalled = false;
     }
     transcriptionClient?.close();
+    clearQuotaRecoveryTimer();
     void cleanupMeetingForLifecycle(false);
     clearRecordingSelection();
   }
@@ -143,6 +154,7 @@ export const useMeetingStore = defineStore("meeting", () => {
       return;
     }
     resetMeetingView();
+    startOperationPending.value = true;
     phase.value = "starting";
     const operationVersion = ++startOperationVersion;
 
@@ -152,7 +164,10 @@ export const useMeetingStore = defineStore("meeting", () => {
       assertStartOperationActive(operationVersion);
       const created = await gateway.createMeeting({
         language: "auto",
-        retainAudio: retainAudio.value,
+        // Raw audio is persisted only in the user's local recording folder.
+        // The backend currently stores transcripts and summaries, not a
+        // cloud-playable recording object.
+        retainAudio: false,
         transcriptionConsent: transcriptionConsent.value,
         idempotencyKey: crypto.randomUUID(),
       });
@@ -172,6 +187,33 @@ export const useMeetingStore = defineStore("meeting", () => {
           },
           onConnectionStateChange: (state) => {
             connectionState.value = state;
+            if ((state === "disconnected" || state === "closed") && phase.value === "starting") {
+              const failure = meetingError.value ?? toMeetingError(
+                new Error("实时转写连接已经结束"),
+                "start",
+              );
+              meetingError.value = failure;
+              const startingRecorder = recorder;
+              recorder = undefined;
+              void startingRecorder?.stop().catch((error: unknown) => {
+                console.error("stop audio capture after startup connection loss", error);
+              });
+              return;
+            }
+            if ((state === "disconnected" || state === "closed") && phase.value === "recording") {
+              const failure = meetingError.value ?? toMeetingError(
+                new Error("实时转写连接已经结束"),
+                "stop",
+              );
+              window.setTimeout(() => {
+                if (phase.value !== "recording") {
+                  return;
+                }
+                void performStopMeeting().finally(() => {
+                  meetingError.value = failure;
+                });
+              }, 0);
+            }
           },
         });
         await transcriptionClient.connect();
@@ -190,7 +232,7 @@ export const useMeetingStore = defineStore("meeting", () => {
             },
             getDesktopBridge(),
           );
-      await recorder.start((chunk, capturedAt) => {
+      await withTimeout(recorder.start((chunk, capturedAt) => {
         transcriptionClient?.sendAudioChunk(chunk, capturedAt);
       }, (error) => {
         const captureFailure = toMeetingError(error, "stop");
@@ -211,10 +253,25 @@ export const useMeetingStore = defineStore("meeting", () => {
           return;
         }
         mixedAudioLevel.value = level.peak;
-      });
+      }), 45_000, "启动本地音频采集超时");
       assertStartOperationActive(operationVersion);
 
       phase.value = "recording";
+      if (created.websocketUrl && connectionState.value !== "connected") {
+        const connectionFailure = meetingError.value ?? toMeetingError(
+          new Error("实时转写连接已经结束"),
+          "stop",
+        );
+        window.setTimeout(() => {
+          if (phase.value !== "recording") {
+            return;
+          }
+          void performStopMeeting().finally(() => {
+            meetingError.value = connectionFailure;
+          });
+        }, 0);
+        return;
+      }
       startElapsedTimer();
       if (appConfig.useMockApi) {
         scheduleMockTranscript();
@@ -237,8 +294,12 @@ export const useMeetingStore = defineStore("meeting", () => {
         }
       }
       phase.value = interruptedByLifecycle ? "cancelled" : "failed";
-      meetingError.value = interruptedByLifecycle ? undefined : toMeetingError(error, "start");
+      meetingError.value = interruptedByLifecycle
+        ? undefined
+        : (meetingError.value ?? toMeetingError(error, "start"));
       void refreshQuota();
+    } finally {
+      startOperationPending.value = false;
     }
   }
 
@@ -247,9 +308,17 @@ export const useMeetingStore = defineStore("meeting", () => {
   }
 
   async function performStopMeeting(): Promise<void> {
-    if (!canStop.value || !session.value) {
+    if (!canStop.value) {
       return;
     }
+    const cancellingStartup = phase.value === "starting";
+    if (cancellingStartup) {
+      // Invalidate every continuation in startMeeting. If the create request
+      // finishes after this point, its catch path compensates by stopping the
+      // newly-created server meeting with the same idempotency key.
+      startOperationVersion += 1;
+    }
+    stopOperationPending.value = true;
     meetingError.value = undefined;
     phase.value = "stopping";
     clearTimers();
@@ -260,6 +329,11 @@ export const useMeetingStore = defineStore("meeting", () => {
         await cleanupCapture(true);
       } catch (error) {
         captureError = error;
+      }
+      if (!session.value) {
+        phase.value = "cancelled";
+        void refreshQuota();
+        return;
       }
       phase.value = "processing";
       const gateway = await getMeetingGateway();
@@ -272,6 +346,10 @@ export const useMeetingStore = defineStore("meeting", () => {
       getDesktopBridge().notify("本地录音已保存，会议纪要将在后台生成");
       if (stopped.status === "processing") {
         void trackMeetingCompletion(gateway, stopped);
+      } else if (stopped.summary) {
+        summary.value = stopped.summary;
+      } else if (canGenerateSummary(stopped.status)) {
+        startCurrentSummaryTracking(gateway, stopped.meetingId);
       }
       if (captureError !== undefined) {
         const mapped = toMeetingError(captureError);
@@ -296,6 +374,10 @@ export const useMeetingStore = defineStore("meeting", () => {
         retryable: false,
         failedAction: undefined,
       };
+    } finally {
+      stopOperationPending.value = false;
+      mockTimers.forEach((timer) => window.clearTimeout(timer));
+      mockTimers = [];
     }
   }
 
@@ -304,18 +386,14 @@ export const useMeetingStore = defineStore("meeting", () => {
     initial: { meetingId: string; status: MeetingStatus },
   ): Promise<void> {
     try {
-      const result = await waitForMeetingCompletion(gateway, initial, { timeoutMs: 180_000 });
+      const result = await waitForMeetingCompletion(gateway, initial, { timeoutMs: 60_000 });
       if (session.value?.meetingId !== initial.meetingId) {
         return;
       }
       phase.value = result.status;
       void refreshQuota();
-      const summaryResult = await gateway.getMeetingSummary(initial.meetingId);
-      summary.value = summaryResult.summary;
-      if (summaryResult.status === "succeeded") {
-        getDesktopBridge().notify("会议纪要已生成");
-      } else if (summaryResult.status === "failed") {
-        getDesktopBridge().notify("会议转写已保存，会议纪要生成失败");
+      if (canGenerateSummary(result.status)) {
+        startCurrentSummaryTracking(gateway, initial.meetingId);
       }
     } catch (error) {
       console.warn("background meeting completion polling stopped", {
@@ -326,6 +404,7 @@ export const useMeetingStore = defineStore("meeting", () => {
         return;
       }
       phase.value = "cancelled";
+      void refreshQuota();
       const mapped = toMeetingError(error);
       meetingError.value = {
         ...mapped,
@@ -359,7 +438,11 @@ export const useMeetingStore = defineStore("meeting", () => {
 
   async function deleteRecording(recordingID: string): Promise<void> {
     try {
-      await getRecordingRepository().delete(recordingID);
+      await withTimeout(
+        getRecordingRepository().delete(recordingID),
+        10_000,
+        "删除本地录音超时",
+      );
       if (selectedRecordingID.value === recordingID) {
         clearRecordingSelection();
       }
@@ -409,6 +492,8 @@ export const useMeetingStore = defineStore("meeting", () => {
 
   function resetMeetingView(): void {
     clearTimers();
+    clearQuotaRecoveryTimer();
+    currentSummaryTrackingVersion += 1;
     session.value = undefined;
     transcript.value = [];
     summary.value = undefined;
@@ -482,29 +567,42 @@ export const useMeetingStore = defineStore("meeting", () => {
     let cleanupError: unknown;
     let capturedAudio: CapturedAudio | undefined;
     try {
-      capturedAudio = await activeRecorder?.stop();
+      capturedAudio = await withTimeout(
+        activeRecorder?.stop() ?? Promise.resolve(undefined),
+        10_000,
+        "停止本地录音超时",
+      );
     } catch (error) {
       cleanupError = error;
     }
+    const finalizationTasks: Promise<unknown>[] = [];
     if (graceful && capturedAudio && session.value) {
-      try {
-        await saveRecording(session.value.meetingId, capturedAudio);
-      } catch (error) {
-        cleanupError ??= error;
+      finalizationTasks.push(withTimeout(
+        saveRecording(session.value.meetingId, capturedAudio),
+        10_000,
+        "保存本地录音超时",
+      ));
+    }
+    if (graceful) {
+      finalizationTasks.push(withTimeout(
+        activeClient?.finish() ?? Promise.resolve(),
+        17_000,
+        "等待实时转写结束超时",
+      ));
+    } else {
+      activeClient?.close();
+    }
+    const finalizationResults = await Promise.allSettled(finalizationTasks);
+    for (const result of finalizationResults) {
+      if (result.status === "rejected") {
+        cleanupError ??= result.reason;
       }
     }
     try {
-      if (graceful) {
-        await activeClient?.finish();
-      } else {
-        activeClient?.close();
-      }
-    } catch (error) {
-      cleanupError ??= error;
-    } finally {
       if (!graceful || cleanupError !== undefined) {
         activeClient?.close();
       }
+    } finally {
       connectionState.value = "closed";
     }
     if (cleanupError !== undefined) {
@@ -527,7 +625,11 @@ export const useMeetingStore = defineStore("meeting", () => {
   async function refreshRecordings(): Promise<void> {
     recordingsLoading.value = true;
     try {
-      const stored = await getRecordingRepository().list();
+      const stored = await withTimeout(
+        getRecordingRepository().list(),
+        10_000,
+        "读取本地录音列表超时",
+      );
       recordings.value = stored;
       if (
         selectedRecordingID.value &&
@@ -546,6 +648,53 @@ export const useMeetingStore = defineStore("meeting", () => {
     }
   }
 
+  function startCurrentSummaryTracking(
+    gateway: Awaited<ReturnType<typeof getMeetingGateway>>,
+    meetingID: string,
+  ): void {
+    const trackingVersion = ++currentSummaryTrackingVersion;
+    void trackCurrentSummary(gateway, meetingID, trackingVersion);
+  }
+
+  async function trackCurrentSummary(
+    gateway: Awaited<ReturnType<typeof getMeetingGateway>>,
+    meetingID: string,
+    trackingVersion: number,
+  ): Promise<void> {
+    const deadline = Date.now() + 120_000;
+    let failedAttempts = 0;
+    while (
+      Date.now() < deadline &&
+      trackingVersion === currentSummaryTrackingVersion &&
+      session.value?.meetingId === meetingID &&
+      pluginVisibility.value === "visible"
+    ) {
+      try {
+        const result = await gateway.getMeetingSummary(meetingID, AbortSignal.timeout(5_000));
+        if (
+          trackingVersion !== currentSummaryTrackingVersion ||
+          session.value?.meetingId !== meetingID
+        ) {
+          return;
+        }
+        if (result.status === "succeeded") {
+          summary.value = result.summary;
+          getDesktopBridge().notify("会议纪要已生成");
+          return;
+        }
+        if (result.status === "failed") {
+          getDesktopBridge().notify("会议转写已保存，会议纪要生成失败");
+          return;
+        }
+        failedAttempts = 0;
+      } catch (error) {
+        failedAttempts += 1;
+        console.warn("refresh current meeting summary", { meetingId: meetingID, error });
+      }
+      await delay(Math.min(10_000, 2_000 * 2 ** Math.min(failedAttempts, 2)));
+    }
+  }
+
   async function refreshQuota(): Promise<void> {
     const refreshVersion = ++quotaRefreshVersion;
     quotaLoading.value = true;
@@ -555,10 +704,14 @@ export const useMeetingStore = defineStore("meeting", () => {
       const current = await gateway.getMeetingQuota();
       if (refreshVersion === quotaRefreshVersion) {
         quota.value = current;
+        scheduleQuotaRecoveryRefresh(current);
       }
     } catch (error) {
       if (refreshVersion === quotaRefreshVersion) {
         quotaError.value = describeError(error);
+        if (quota.value) {
+          scheduleQuotaRecoveryRefresh(quota.value);
+        }
       }
     } finally {
       if (refreshVersion === quotaRefreshVersion) {
@@ -587,18 +740,23 @@ export const useMeetingStore = defineStore("meeting", () => {
       recordingDetailLoading.value = false;
       return;
     }
-    const audioResultPromise = getRecordingRepository().loadAudio(recordingID);
+    const audioResultPromise = withTimeout(
+      Promise.resolve().then(() => getRecordingRepository().loadAudio(recordingID)),
+      10_000,
+      "读取本地录音超时",
+    );
     const meetingGatewayPromise = getMeetingGateway();
+    const detailSignal = AbortSignal.timeout(recordingDetailTimeoutMs);
     const meetingResultPromise = (async () => {
       const gateway = await meetingGatewayPromise;
       return Promise.all([
-        gateway.getMeeting(recording.meetingId),
-        gateway.listTranscriptSegments(recording.meetingId),
+        gateway.getMeeting(recording.meetingId, detailSignal),
+        gateway.listTranscriptSegments(recording.meetingId, detailSignal),
       ]);
     })();
     const summaryResultPromise = (async () => {
       const gateway = await meetingGatewayPromise;
-      return gateway.getMeetingSummary(recording.meetingId);
+      return gateway.getMeetingSummary(recording.meetingId, detailSignal);
     })();
     const [audioResult, meetingResult, summaryResult] = await Promise.allSettled([
       audioResultPromise,
@@ -656,15 +814,32 @@ export const useMeetingStore = defineStore("meeting", () => {
     }
   }
 
-  function scheduleRecordingSummaryPoll(meetingID: string, selectionVersion: number): void {
+  function scheduleRecordingSummaryPoll(
+    meetingID: string,
+    selectionVersion: number,
+    failedAttempts = 0,
+    deadline = Date.now() + recordingSummaryTrackingTimeoutMs,
+  ): void {
     clearRecordingSummaryPoll();
+    const pollDelay = nextSummaryPollDelay(failedAttempts, Date.now(), deadline);
+    if (pollDelay === undefined) {
+      stopRecordingSummaryPolling();
+      return;
+    }
     recordingSummaryPollTimer = window.setTimeout(async () => {
       if (selectionVersion !== recordingSelectionVersion) {
         return;
       }
+      if (Date.now() >= deadline) {
+        stopRecordingSummaryPolling();
+        return;
+      }
       try {
         const gateway = await getMeetingGateway();
-        const result = await gateway.getMeetingSummary(meetingID);
+        const result = await gateway.getMeetingSummary(
+          meetingID,
+          AbortSignal.timeout(Math.min(5_000, Math.max(1, deadline - Date.now()))),
+        );
         if (selectionVersion !== recordingSelectionVersion) {
           return;
         }
@@ -672,14 +847,43 @@ export const useMeetingStore = defineStore("meeting", () => {
         recordingSummary.value = result.summary;
         recordingSummaryFailure.value = result.failureReason;
         if (result.status === "pending" || result.status === "processing") {
-          scheduleRecordingSummaryPoll(meetingID, selectionVersion);
+          scheduleRecordingSummaryPoll(meetingID, selectionVersion, 0, deadline);
         }
       } catch (error) {
         if (selectionVersion === recordingSelectionVersion) {
           recordingSummaryFailure.value = `刷新会议总结失败：${describeError(error)}`;
+          scheduleRecordingSummaryPoll(meetingID, selectionVersion, failedAttempts + 1, deadline);
         }
       }
-    }, 2_000);
+    }, pollDelay);
+  }
+
+  function stopRecordingSummaryPolling(): void {
+    recordingSummaryStatus.value = "failed";
+    recordingSummaryFailure.value = "等待会议总结超时，已停止自动刷新；可以点击重新生成。";
+  }
+
+  function scheduleQuotaRecoveryRefresh(current: MeetingQuota): void {
+    clearQuotaRecoveryTimer();
+    if (
+      current.activeMeetings <= 0 ||
+      phase.value === "starting" ||
+      phase.value === "recording" ||
+      pluginVisibility.value !== "visible"
+    ) {
+      return;
+    }
+    quotaRecoveryTimer = window.setTimeout(() => {
+      quotaRecoveryTimer = undefined;
+      void refreshQuota();
+    }, 5_000);
+  }
+
+  function clearQuotaRecoveryTimer(): void {
+    if (quotaRecoveryTimer !== undefined) {
+      window.clearTimeout(quotaRecoveryTimer);
+      quotaRecoveryTimer = undefined;
+    }
   }
 
   function clearRecordingSummaryPoll(): void {
@@ -759,6 +963,7 @@ export const useMeetingStore = defineStore("meeting", () => {
         return;
       case "out":
         pluginVisibility.value = "hidden";
+        clearQuotaRecoveryTimer();
         void cleanupMeetingForLifecycle(true);
         return;
     }
@@ -772,7 +977,6 @@ export const useMeetingStore = defineStore("meeting", () => {
     quota,
     quotaLoading,
     quotaError,
-    retainAudio,
     captureSystemAudio,
     captureMicrophone,
     systemAudioLevel,
@@ -843,4 +1047,43 @@ function formatDuration(seconds: number): string {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : "未知错误";
+}
+
+function canGenerateSummary(status: MeetingStatus): boolean {
+  return status === "completed" || status === "partially_completed";
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(new Error(message));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }

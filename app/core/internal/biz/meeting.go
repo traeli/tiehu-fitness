@@ -150,7 +150,8 @@ func ParseMeetingTranscriptionStatus(raw string) (MeetingTranscriptionStatus, er
 func (s MeetingTranscriptionStatus) CanTransitionTo(next MeetingTranscriptionStatus) bool {
 	switch s {
 	case MeetingTranscriptionStatusPending:
-		return next == MeetingTranscriptionStatusConnecting || next == MeetingTranscriptionStatusFailed || next == MeetingTranscriptionStatusCancelled
+		return next == MeetingTranscriptionStatusConnecting || next == MeetingTranscriptionStatusFailed ||
+			next == MeetingTranscriptionStatusCancelled || next == MeetingTranscriptionStatusExpired
 	case MeetingTranscriptionStatusConnecting:
 		return next == MeetingTranscriptionStatusStreaming || next == MeetingTranscriptionStatusFinishing || next == MeetingTranscriptionStatusSucceeded || next == MeetingTranscriptionStatusFailed || next == MeetingTranscriptionStatusCancelled || next == MeetingTranscriptionStatusExpired
 	case MeetingTranscriptionStatusStreaming:
@@ -425,6 +426,9 @@ func (uc *MeetingUsecase) Create(ctx context.Context, command CreateMeetingComma
 	if stderrors.Is(err, ErrMeetingQuotaExceeded) {
 		return nil, kratoserrors.TooManyRequests("MEETING_QUOTA_EXCEEDED", "meeting audio quota is exhausted")
 	}
+	if stderrors.Is(err, ErrMeetingConcurrentLimitReached) {
+		return nil, kratoserrors.Conflict("MEETING_CONCURRENT_LIMIT_REACHED", "another meeting is still active")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -570,13 +574,31 @@ func (uc *MeetingUsecase) ReportTranscriptionUsage(ctx context.Context, meetingI
 
 func (uc *MeetingUsecase) CompleteTranscription(ctx context.Context, command FinalizeMeetingTranscriptionCommand) (*FinalizeMeetingTranscriptionResult, error) {
 	command.SettlementReason = MeetingUsageSettlementReasonCompleted
-	command.MeetingStatus = MeetingStatusProcessing
+	// Transcription is the meeting's terminal boundary. Summary generation is an
+	// independent asynchronous enhancement and must never keep the meeting in a
+	// processing state while an LLM request or retry is running.
+	command.MeetingStatus = MeetingStatusCompleted
 	command.TranscriptionStatus = MeetingTranscriptionStatusSucceeded
 	result, err := uc.finalizeTranscription(ctx, command)
 	if err != nil {
 		return nil, err
 	}
-	if uc.summaryRepo == nil || uc.summaryVision == nil {
+	if uc.summaryRepo == nil {
+		return nil, kratoserrors.ServiceUnavailable("SUMMARY_SERVICE_UNAVAILABLE", "meeting summary service is unavailable")
+	}
+	if result.Meeting.TranscriptRevision == 0 {
+		completed, err := uc.summaryRepo.CompleteEmptyTranscriptSummary(
+			ctx,
+			result.Meeting.UserID,
+			NewEmptyTranscriptSummary(result.Meeting.ID, command.FinalizedAt),
+		)
+		if err != nil {
+			return nil, mapMeetingRepoError(err)
+		}
+		result.Meeting = completed
+		return result, nil
+	}
+	if uc.summaryVision == nil {
 		return nil, kratoserrors.ServiceUnavailable("SUMMARY_SERVICE_UNAVAILABLE", "meeting summary service is unavailable")
 	}
 	task, err := uc.summaryRepo.EnsureSummaryTask(ctx, result.Meeting.ID, result.Meeting.UserID, "automatic:"+strconv.FormatInt(result.Meeting.TranscriptRevision, 10), command.FinalizedAt)

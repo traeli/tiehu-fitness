@@ -62,6 +62,9 @@ interface PCMWorkletMessage {
 const pcmMIMEType = "audio/pcm;rate=16000";
 const nativeSystemAudioSampleRate = 48_000 as const;
 const flushTimeoutMs = 1_000;
+const nativeStopTimeoutMs = 3_000;
+const mediaRecorderStopTimeoutMs = 3_000;
+const audioContextCloseTimeoutMs = 2_000;
 const recordingBitsPerSecond = 64_000;
 const maxCapturedRecordingBytes = 256 * 1024 * 1024;
 const recordingMIMETypes = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"] as const;
@@ -88,6 +91,7 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
   #recordedBytes = 0;
   #recordingError?: Error;
   #recordingStartedAt?: number;
+  #operationVersion = 0;
 
   constructor(
     private readonly audio: AudioConstraints,
@@ -114,21 +118,27 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
     }
 
     const streams: MediaStream[] = [];
+    const operationVersion = ++this.#operationVersion;
+    const assertOperationActive = () => {
+      if (operationVersion !== this.#operationVersion) {
+        throw new Error("音频采集启动已取消");
+      }
+    };
     let context: AudioContext | undefined;
-    let nativeSystemAudioRunning = false;
+    let nativeSystemAudioStartAttempted = false;
     let nativeStartupFailure: AudioCaptureError | undefined;
     try {
       if (this.capture.captureMicrophone) {
-        streams.push(
-          await navigator.mediaDevices.getUserMedia({
+        const microphoneStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               channelCount: 1,
               echoCancellation: true,
               noiseSuppression: true,
             },
             video: false,
-          }),
-        );
+          });
+        streams.push(microphoneStream);
+        assertOperationActive();
       }
       if (
         !this.capture.captureSystemAudio &&
@@ -144,6 +154,7 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
           ? context.audioWorklet.addModule(nativeSystemAudioWorkletUrl)
           : Promise.resolve(),
       ]);
+      assertOperationActive();
       const mix = context.createGain();
       mix.channelCount = 1;
       mix.channelCountMode = "explicit";
@@ -250,11 +261,13 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
       this.#recordingDestination = recordingDestination;
       this.#onChunk = onChunk;
       await context.resume();
+      assertOperationActive();
       if (this.capture.captureSystemAudio) {
         const nativeSystemSource = this.#nativeSystemSource;
         if (!nativeSystemSource) {
           throw new AudioCaptureError("SYSTEM_AUDIO_UNAVAILABLE", "系统音频节点没有正确初始化");
         }
+        nativeSystemAudioStartAttempted = true;
         try {
           await this.systemAudioGateway.startSystemAudioCapture(
             { sampleRate: nativeSystemAudioSampleRate, channels: 1, format: "pcm_s16le" },
@@ -274,8 +287,8 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
         } catch (error) {
           throw mapUnknownNativeSystemAudioFailure(error);
         }
-        nativeSystemAudioRunning = true;
         this.#nativeSystemAudioRunning = true;
+        assertOperationActive();
         if (nativeStartupFailure) {
           throw nativeStartupFailure;
         }
@@ -284,9 +297,16 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
       this.#mediaRecorder = mediaRecorder;
       this.#recordingStartedAt = Date.now();
     } catch (error) {
-      if (nativeSystemAudioRunning) {
+      // The native process may reject before reporting ready while it is still
+      // shutting down. Always issue a bounded stop once startup was attempted,
+      // otherwise a later meeting can be rejected as already running.
+      if (nativeSystemAudioStartAttempted) {
         try {
-          await this.systemAudioGateway.stopSystemAudioCapture();
+          await withAudioTimeout(
+            this.systemAudioGateway.stopSystemAudioCapture(),
+            nativeStopTimeoutMs,
+            "停止系统音频组件超时",
+          );
         } catch (stopError) {
           console.error("stop native system audio after startup failure", stopError);
         }
@@ -295,7 +315,11 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
       streams.forEach(stopMediaStream);
       if (context) {
         try {
-          await context.close();
+          await withAudioTimeout(
+            context.close(),
+            audioContextCloseTimeoutMs,
+            "关闭音频上下文超时",
+          );
         } catch (closeError) {
           console.error("close audio context after startup failure", closeError);
         }
@@ -306,6 +330,7 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
   }
 
   async stop(): Promise<CapturedAudio | undefined> {
+    this.#operationVersion += 1;
     const context = this.#context;
     const worklet = this.#worklet;
     let captured: CapturedAudio | undefined;
@@ -313,7 +338,11 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
 
     if (this.#nativeSystemAudioRunning) {
       try {
-        await this.systemAudioGateway.stopSystemAudioCapture();
+        await withAudioTimeout(
+          this.systemAudioGateway.stopSystemAudioCapture(),
+          nativeStopTimeoutMs,
+          "停止系统音频组件超时",
+        );
       } catch (error) {
         stopError = error;
       }
@@ -345,7 +374,11 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
     this.#streams.forEach(stopMediaStream);
     if (context) {
       try {
-        await context.close();
+        await withAudioTimeout(
+          context.close(),
+          audioContextCloseTimeoutMs,
+          "关闭音频上下文超时",
+        );
       } catch (error) {
         stopError ??= error;
       }
@@ -365,13 +398,38 @@ export class BrowserMeetingAudioRecorder implements AudioRecorder {
     }
     if (mediaRecorder.state !== "inactive") {
       await new Promise<void>((resolve, reject) => {
-        mediaRecorder.addEventListener("stop", () => resolve(), { once: true });
-        mediaRecorder.addEventListener(
-          "error",
-          (event) => reject(new Error(`本地录音失败：${event.error.name}`)),
-          { once: true },
+        let settled = false;
+        const finish = (error?: Error) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          window.clearTimeout(timer);
+          mediaRecorder.removeEventListener("stop", handleStop);
+          mediaRecorder.removeEventListener("error", handleError);
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        };
+        const handleStop = () => finish();
+        const handleError = (event: Event) => {
+          const recorderError = Reflect.get(event, "error");
+          const errorName = recorderError instanceof Error ? recorderError.name : "UNKNOWN";
+          finish(new Error(`本地录音失败：${errorName}`));
+        };
+        const timer = window.setTimeout(
+          () => finish(new Error("停止本地录音超时")),
+          mediaRecorderStopTimeoutMs,
         );
-        mediaRecorder.stop();
+        mediaRecorder.addEventListener("stop", handleStop, { once: true });
+        mediaRecorder.addEventListener("error", handleError, { once: true });
+        try {
+          mediaRecorder.stop();
+        } catch (error) {
+          finish(error instanceof Error ? error : new Error("停止本地录音失败"));
+        }
       });
     }
     if (this.#recordingError) {
@@ -517,4 +575,20 @@ function parseWorkletMessage(value: unknown): PCMWorkletMessage | undefined {
     return { type: "chunk", buffer };
   }
   return undefined;
+}
+
+function withAudioTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }

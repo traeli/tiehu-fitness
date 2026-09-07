@@ -369,12 +369,18 @@ func (uc *MeetingSummaryUsecase) processJob(ctx context.Context, job *MeetingSum
 		if err := uc.sink.CompleteMeetingSummary(ctx, job); err != nil {
 			return uc.retryDelivery(ctx, job, err, now)
 		}
-		return uc.repo.MarkSucceeded(ctx, job.ID, now)
+		if err := uc.repo.MarkSucceeded(ctx, job.ID, now); err != nil {
+			return uc.retryDelivery(ctx, job, err, now)
+		}
+		return nil
 	case MeetingSummaryJobStatusFailureDeliveryPending:
 		if err := uc.sink.FailMeetingSummary(ctx, job, now); err != nil {
 			return uc.retryDelivery(ctx, job, err, now)
 		}
-		return uc.repo.MarkFailed(ctx, job.ID, now)
+		if err := uc.repo.MarkFailed(ctx, job.ID, now); err != nil {
+			return uc.retryDelivery(ctx, job, err, now)
+		}
+		return nil
 	case MeetingSummaryJobStatusPending, MeetingSummaryJobStatusProcessing:
 		return uc.generateAndDeliver(ctx, job, now)
 	default:

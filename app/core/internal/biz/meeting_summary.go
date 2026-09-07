@@ -19,6 +19,10 @@ const (
 	maxSummaryAssigneeRunes = 200
 	maxSummaryDueTextRunes  = 500
 	maxSummarySnapshotItems = 10_000
+
+	emptyTranscriptSummaryProvider      = "system"
+	emptyTranscriptSummaryModel         = "empty-transcript-fallback"
+	emptyTranscriptSummaryPromptVersion = "empty-transcript-v1"
 )
 
 type MeetingSummaryStatus uint8
@@ -159,6 +163,51 @@ type MeetingSummary struct {
 	UpdatedAt                time.Time
 }
 
+// NewEmptyTranscriptSummary creates the deterministic terminal summary used
+// when ASR accepted audio but produced no final text. Keeping this outcome in
+// Core prevents an optional LLM job from blocking transcription settlement.
+func NewEmptyTranscriptSummary(meetingID string, generatedAt time.Time) *MeetingSummary {
+	generatedAt = generatedAt.UTC()
+	return &MeetingSummary{
+		MeetingID: meetingID, Version: 1, SourceTranscriptRevision: 0,
+		Status:         MeetingSummaryStatusSucceeded,
+		Topic:          "未识别到有效转写",
+		Abstract:       "本次录音未识别到有效语音内容，已按实际录音时长完成额度结算。",
+		KeyDiscussions: []string{}, Decisions: []string{}, ActionItems: []MeetingActionItem{}, Risks: []string{},
+		Provider: emptyTranscriptSummaryProvider, ModelName: emptyTranscriptSummaryModel,
+		PromptVersion: emptyTranscriptSummaryPromptVersion,
+		GeneratedAt:   &generatedAt, CreatedAt: generatedAt, UpdatedAt: generatedAt,
+	}
+}
+
+// ValidateEmptyTranscriptFallback validates the one completed-summary shape
+// that intentionally has no source transcript revision and never calls an LLM.
+func (s *MeetingSummary) ValidateEmptyTranscriptFallback() error {
+	if s == nil {
+		return fmt.Errorf("empty transcript summary is required")
+	}
+	if _, err := uuid.Parse(s.MeetingID); err != nil || s.Version != 1 || s.SourceTranscriptRevision != 0 {
+		return fmt.Errorf("empty transcript summary identity is invalid")
+	}
+	if s.Status != MeetingSummaryStatusSucceeded || s.GeneratedAt == nil || s.GeneratedAt.IsZero() {
+		return fmt.Errorf("empty transcript summary state is invalid")
+	}
+	if s.Provider != emptyTranscriptSummaryProvider || s.ModelName != emptyTranscriptSummaryModel ||
+		s.PromptVersion != emptyTranscriptSummaryPromptVersion || s.InputTokens != 0 || s.OutputTokens != 0 {
+		return fmt.Errorf("empty transcript summary provenance is invalid")
+	}
+	if err := validateSummaryText("topic", s.Topic, 1, maxSummaryTopicRunes); err != nil {
+		return err
+	}
+	if err := validateSummaryText("abstract", s.Abstract, 1, maxSummaryAbstractRunes); err != nil {
+		return err
+	}
+	if len(s.KeyDiscussions) != 0 || len(s.Decisions) != 0 || len(s.ActionItems) != 0 || len(s.Risks) != 0 {
+		return fmt.Errorf("empty transcript summary details must be empty")
+	}
+	return nil
+}
+
 func (s *MeetingSummary) ValidateCompleted() error {
 	if s == nil {
 		return fmt.Errorf("meeting summary is required")
@@ -256,6 +305,7 @@ type FailMeetingSummaryCommand struct {
 
 type MeetingSummaryRepo interface {
 	EnsureSummaryTask(context.Context, string, string, string, time.Time) (*MeetingSummaryTask, error)
+	CompleteEmptyTranscriptSummary(context.Context, string, *MeetingSummary) (*Meeting, error)
 	MarkSummaryTaskProcessing(context.Context, string, int64, time.Time) error
 	GetSummary(context.Context, string, string) (*MeetingSummaryView, error)
 	GetTranscriptSnapshot(context.Context, string, int64, int) (*MeetingTranscriptSnapshot, error)

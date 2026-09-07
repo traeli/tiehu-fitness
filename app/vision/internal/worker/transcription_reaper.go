@@ -11,8 +11,8 @@ import (
 	"github.com/tiehu-ai/tiehu-fitness/app/vision/internal/biz"
 )
 
-// TranscriptionReaper owns cleanup of prepared sessions whose WebSocket ticket
-// was never consumed, such as when the desktop process exits during startup.
+// TranscriptionReaper owns cleanup of every abandoned non-terminal session,
+// including durable sessions left behind by a process restart.
 type TranscriptionReaper struct {
 	usecase      *biz.TranscriptionUsecase
 	pollInterval time.Duration
@@ -62,12 +62,12 @@ func (w *TranscriptionReaper) Start(ctx context.Context) error {
 		close(w.done)
 	}()
 
-	w.logger.Info("transcription pending-session reaper started", "poll_interval", w.pollInterval, "stale_after", w.staleAfter)
+	w.logger.Info("transcription session reaper started", "poll_interval", w.pollInterval, "stale_after", w.staleAfter)
 	ticker := time.NewTicker(w.pollInterval)
 	defer ticker.Stop()
 	for {
 		if err := w.runBatch(runCtx); err != nil && runCtx.Err() == nil {
-			w.logger.Error("expire stale pending transcription sessions", "error", err)
+			w.logger.Error("expire stale transcription sessions", "error", err)
 		}
 		select {
 		case <-runCtx.Done():
@@ -109,9 +109,9 @@ func (w *TranscriptionReaper) runBatch(ctx context.Context) (err error) {
 	}()
 	batchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	expired, err := w.usecase.ExpireStalePending(batchCtx, time.Now().UTC().Add(-w.staleAfter), w.batchSize)
+	expired, err := w.usecase.ExpireStaleSessions(batchCtx, time.Now().UTC().Add(-w.staleAfter), w.batchSize)
 	if err == nil && expired > 0 {
-		w.logger.Info("stale pending transcription sessions expired", "sessions", expired)
+		w.logger.Info("stale transcription sessions expired", "sessions", expired)
 	}
 	return err
 }

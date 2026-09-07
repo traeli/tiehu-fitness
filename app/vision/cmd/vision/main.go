@@ -154,8 +154,17 @@ func run() error {
 			)
 		}
 	}
+	coreGateway, err := data.NewCoreMeetingIngestGateway(context.Background(), bc.GetCoreGrpcClient())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := coreGateway.Close(); err != nil {
+			logger.Error("close core gRPC client", "error", err)
+		}
+	}()
 	transcriptionUC, err := biz.NewTranscriptionUsecase(
-		transcriptionRepo, ticketRepo, transcriptionRepo, asrProviders, nil, nil,
+		transcriptionRepo, ticketRepo, transcriptionRepo, asrProviders, nil, coreGateway,
 		biz.TranscriptionPolicy{
 			WebSocketURL:                   realtime.GetWebsocketUrl(),
 			AllowInsecureLoopbackWebSocket: localFakeASR || realtime.GetAllowInsecureLoopback(),
@@ -167,15 +176,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create transcription use case: %w", err)
 	}
-	coreGateway, err := data.NewCoreMeetingIngestGateway(context.Background(), bc.GetCoreGrpcClient())
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := coreGateway.Close(); err != nil {
-			logger.Error("close core gRPC client", "error", err)
-		}
-	}()
 	outboxUC, err := biz.NewTranscriptionOutboxUsecase(transcriptionRepo, coreGateway, biz.TranscriptionOutboxPolicy{
 		LeaseTimeout: outboxConfig.GetLeaseTimeout().AsDuration(), BatchSize: int(outboxConfig.GetBatchSize()),
 		MaxAttempts: outboxConfig.GetMaxAttempts(), InitialBackoff: outboxConfig.GetInitialBackoff().AsDuration(),
@@ -228,24 +228,25 @@ func run() error {
 		return fmt.Errorf("create vision HTTP server: %w", err)
 	}
 	gs := server.NewGRPCServer(bc.Server, svc, transcriptionSvc)
-	pollInterval := outboxConfig.GetPollInterval().AsDuration()
-	if summaryPoll := summaryWorkerConfig.GetPollInterval().AsDuration(); summaryPoll < pollInterval {
-		pollInterval = summaryPoll
-	}
-	workerPool, err := worker.NewServer(outboxUC, pollInterval, logger, summaryUC)
+	workerPool, err := worker.NewServer(
+		outboxUC,
+		outboxConfig.GetPollInterval().AsDuration(),
+		summaryUC,
+		summaryWorkerConfig.GetPollInterval().AsDuration(),
+		logger,
+	)
 	if err != nil {
 		return fmt.Errorf("create transcription outbox worker: %w", err)
 	}
-	ticketTTL := realtime.GetTicketTtl().AsDuration()
-	reaperPollInterval := ticketTTL / 2
+	staleSessionAfter := realtime.GetStaleSessionTimeout().AsDuration()
+	reaperPollInterval := staleSessionAfter / 3
 	if reaperPollInterval < time.Second {
 		reaperPollInterval = time.Second
 	}
 	if reaperPollInterval > 30*time.Second {
 		reaperPollInterval = 30 * time.Second
 	}
-	stalePendingAfter := ticketTTL + realtime.GetHandshakeTimeout().AsDuration()
-	transcriptionReaper, err := worker.NewTranscriptionReaper(transcriptionUC, reaperPollInterval, stalePendingAfter, 100, logger)
+	transcriptionReaper, err := worker.NewTranscriptionReaper(transcriptionUC, reaperPollInterval, staleSessionAfter, 100, logger)
 	if err != nil {
 		return fmt.Errorf("create transcription session reaper: %w", err)
 	}

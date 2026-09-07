@@ -113,6 +113,11 @@ message RealtimeTranscription {
   int32 max_connections = 10;
   // allow_insecure_loopback permits ws:// only for localhost development.
   bool allow_insecure_loopback = 11;
+  // usage_report_interval controls cumulative usage heartbeats sent to Core.
+  google.protobuf.Duration usage_report_interval = 12;
+  // stale_session_timeout bounds recovery of non-terminal sessions after a
+  // renderer, network, or Vision process disappears.
+  google.protobuf.Duration stale_session_timeout = 13;
 }
 
 message Auth {

@@ -156,6 +156,24 @@ func (r *MeetingSummaryRepo) ClaimJobs(ctx context.Context, now time.Time, lease
 				}
 				row.Status = string(biz.MeetingSummaryJobStatusProcessing)
 				row.UpdatedAt = now
+			} else {
+				// Delivery states cannot be changed to processing because that would
+				// lose whether a success or failure callback is pending. Lease them by
+				// moving available_at so another service replica cannot deliver the
+				// same callback concurrently; a crashed worker becomes claimable again.
+				leaseUntil := now.Add(leaseTimeout)
+				result := tx.WithContext(ctx).Model(row).Updates(map[string]any{
+					"available_at": leaseUntil,
+					"updated_at":   now,
+				})
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected != 1 {
+					return fmt.Errorf("claimed meeting summary delivery disappeared")
+				}
+				row.AvailableAt = leaseUntil
+				row.UpdatedAt = now
 			}
 			job, err := meetingSummaryJobModelToBiz(row)
 			if err != nil {

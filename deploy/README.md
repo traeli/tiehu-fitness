@@ -109,10 +109,41 @@ Vision's WebSocket URL is returned by the meeting creation API and comes from
 
 ## Updating
 
+Database migrations must be applied before starting the new service images.
+For an existing installation that is already on migration `000012`, back up
+Core's database and apply only the new migrations once:
+
 ```bash
 git pull
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml build
+
+docker exec nutrilens-pg pg_dump -U nutrilens -d tiehu_core -Fc \
+  -f /tmp/tiehu_core_before_000013.dump
+docker cp nutrilens-pg:/tmp/tiehu_core_before_000013.dump \
+  ./tiehu_core_before_000013.dump
+
+docker exec -i nutrilens-pg psql -v ON_ERROR_STOP=1 -U nutrilens -d tiehu_core \
+  < app/core/migrations/000013_complete_empty_transcript_meetings.up.sql
+docker exec -i nutrilens-pg psql -v ON_ERROR_STOP=1 -U nutrilens -d tiehu_core \
+  < app/core/migrations/000014_add_renewable_meeting_quota_leases.up.sql
+
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d
+```
+
+Replace `nutrilens`, `tiehu_core`, and the container name when the values in
+`CORE_DATABASE_DSN` differ. Do not replay all historical migration files on an
+existing database.
+
+Legacy `docker-compose` 1.29 may fail to recreate images with
+`KeyError: 'ContainerConfig'`. Remove only the two stopped application
+containers and then start them again; PostgreSQL and Redis are not touched:
+
+```bash
+docker-compose --env-file deploy/.env -p tiehu-fitness \
+  -f deploy/docker-compose.yml stop core vision
+docker rm tiehu-core tiehu-vision
+docker-compose --env-file deploy/.env -p tiehu-fitness \
+  -f deploy/docker-compose.yml up -d --no-deps core vision
 ```
 
 To rotate provider keys, rerun the `provider-credentials` command from step 4.

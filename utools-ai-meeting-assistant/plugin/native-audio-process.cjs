@@ -147,12 +147,28 @@ class NativeSystemAudioProcess {
     }
     if (this.#state === "stopping") {
       return new Promise((resolve) => {
+        let settled = false;
         const previousResolve = this.#stopResolve;
-        this.#stopResolve = () => {
+        const finish = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timer);
           previousResolve?.();
           resolve();
         };
+        const timer = setTimeout(finish, stopTimeoutMs);
+        this.#stopResolve = finish;
       });
+    }
+    if (this.#state === "starting") {
+      this.#startReject?.(new NativeSystemAudioError(
+        "SYSTEM_AUDIO_START_CANCELLED",
+        "系统音频组件启动已取消",
+      ));
+      this.#startResolve = undefined;
+      this.#startReject = undefined;
     }
     this.#state = "stopping";
     clearTimeout(this.#startTimer);
@@ -160,6 +176,11 @@ class NativeSystemAudioProcess {
       this.#stopResolve = resolve;
       this.#stopTimer = setTimeout(() => {
         this.#terminateChild();
+        // Some platform/process combinations do not emit close promptly after
+        // kill. The renderer cleanup must remain bounded even in that case.
+        const stopResolve = this.#stopResolve;
+        this.#stopResolve = undefined;
+        stopResolve?.();
       }, stopTimeoutMs);
       this.#child?.stdin.end("stop\n");
     });

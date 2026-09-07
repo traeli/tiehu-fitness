@@ -114,4 +114,51 @@ func TestTranscriptionRepoPostgresLifecycle(t *testing.T) {
 	if err != nil || len(retried) != 1 || retried[0].ID != secondDelivery[0].ID || retried[0].AttemptCount != 1 {
 		t.Fatalf("retried outbox claim = (%#v, %v)", retried, err)
 	}
+
+	stale := &biz.TranscriptionSession{
+		ID: uuid.NewString(), ProviderConfigID: session.ProviderConfigID,
+		MeetingID: uuid.NewString(), UserID: uuid.NewString(), ReservationID: uuid.NewString(),
+		Language: biz.MeetingLanguageAuto, Status: biz.TranscriptionSessionStatusPending,
+		Provider: biz.ASRProviderNameBailianParaformer, IdempotencyKey: uuid.NewString(),
+		GrantedAudioDuration: biz.GrantedAudioDuration(time.Minute), CreatedAt: now, UpdatedAt: now,
+	}
+	if _, created, err := repo.CreateOrGet(context.Background(), stale); err != nil || !created {
+		t.Fatalf("create stale session = (%v, %v)", created, err)
+	}
+	if _, err := repo.Transition(context.Background(), stale.ID, []biz.TranscriptionSessionStatus{biz.TranscriptionSessionStatusPending}, biz.TranscriptionSessionStatusConnecting, ""); err != nil {
+		t.Fatal(err)
+	}
+	staleAttempt, err := repo.StartAttempt(context.Background(), stale.ID, biz.ASRProviderNameBailianParaformer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Transition(context.Background(), stale.ID, []biz.TranscriptionSessionStatus{biz.TranscriptionSessionStatusConnecting}, biz.TranscriptionSessionStatusStreaming, ""); err != nil {
+		t.Fatal(err)
+	}
+	staleUpdatedAt := time.Now().UTC().Add(-2 * time.Minute)
+	if err := db.Model(&model.TranscriptionSession{}).Where("id = ?", stale.ID).UpdateColumn("updated_at", staleUpdatedAt).Error; err != nil {
+		t.Fatal(err)
+	}
+	listed, err := repo.ListStaleNonTerminal(context.Background(), time.Now().UTC().Add(-time.Minute), 10)
+	if err != nil || len(listed) != 1 || listed[0].ID != stale.ID {
+		t.Fatalf("ListStaleNonTerminal() = (%#v, %v)", listed, err)
+	}
+	expiredSession, expired, err := repo.ExpireStale(context.Background(), stale.ID, time.Now().UTC().Add(-time.Minute))
+	if err != nil || !expired || expiredSession.Status != biz.TranscriptionSessionStatusExpired {
+		t.Fatalf("ExpireStale() = (%#v, %v, %v)", expiredSession, expired, err)
+	}
+	var storedAttempt model.AIJobAttempt
+	if err := db.Where("id = ?", staleAttempt.ID).Take(&storedAttempt).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedAttempt.Status != string(biz.ASRAttemptStatusCancelled) || storedAttempt.ErrorCode != "SESSION_EXPIRED" || storedAttempt.FinishedAt == nil {
+		t.Fatalf("stale ASR attempt = %#v", storedAttempt)
+	}
+	var staleOutboxCount int64
+	if err := db.Model(&model.TranscriptionOutbox{}).Where("session_id = ?", stale.ID).Count(&staleOutboxCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if staleOutboxCount != 1 {
+		t.Fatalf("stale session outbox count = %d, want 1", staleOutboxCount)
+	}
 }

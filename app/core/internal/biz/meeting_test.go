@@ -13,6 +13,7 @@ import (
 type meetingFakeRepo struct {
 	meeting       *Meeting
 	reservation   *MeetingUsageReservation
+	createErr     error
 	createCalls   int
 	stopCalls     int
 	failPrepCalls int
@@ -27,6 +28,9 @@ func (r *meetingFakeRepo) FindByCreateIdempotency(_ context.Context, userID, key
 
 func (r *meetingFakeRepo) CreateWithQuota(_ context.Context, input MeetingCreatePersistenceInput, quota MeetingQuotaReserveInput) (*MeetingCreatePersistenceResult, error) {
 	r.createCalls++
+	if r.createErr != nil {
+		return nil, r.createErr
+	}
 	if r.meeting != nil {
 		return &MeetingCreatePersistenceResult{Meeting: r.meeting, Reservation: r.reservation, Existing: true}, nil
 	}
@@ -47,6 +51,30 @@ func (r *meetingFakeRepo) CreateWithQuota(_ context.Context, input MeetingCreate
 		ExpiresAt: quota.ExpiresAt,
 	}
 	return &MeetingCreatePersistenceResult{Meeting: r.meeting, Reservation: r.reservation}, nil
+}
+
+func TestMeetingCreateMapsConcurrentLimit(t *testing.T) {
+	repo := &meetingFakeRepo{createErr: ErrMeetingConcurrentLimitReached}
+	quotaRepo := &quotaFakeRepo{defaultPolicy: mustMeetingTestPolicy(t)}
+	quotaUsecase, err := NewMeetingQuotaUsecase(
+		quotaRepo,
+		quotaRepo,
+		&quotaFakeRateLimiter{decision: MeetingCreateRateDecision{Allowed: true}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	usecase, err := NewMeetingUsecase(repo, quotaUsecase, &meetingFakeVision{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = usecase.Create(context.Background(), CreateMeetingCommand{
+		UserID: uuid.NewString(), IdempotencyKey: uuid.NewString(), Language: MeetingLanguageAuto,
+		TranscriptionConsent: true, Now: time.Now().UTC(),
+	})
+	if kratoserrors.Reason(err) != "MEETING_CONCURRENT_LIMIT_REACHED" {
+		t.Fatalf("Create() error = %v", err)
+	}
 }
 
 func (r *meetingFakeRepo) MarkTranscriptionPrepared(_ context.Context, userID, meetingID string, session *MeetingTranscriptionSession, now time.Time) (*Meeting, error) {
@@ -169,6 +197,7 @@ func TestMeetingStateTransitions(t *testing.T) {
 		want     bool
 	}{
 		{MeetingTranscriptionStatusPending, MeetingTranscriptionStatusConnecting, true},
+		{MeetingTranscriptionStatusPending, MeetingTranscriptionStatusExpired, true},
 		{MeetingTranscriptionStatusConnecting, MeetingTranscriptionStatusStreaming, true},
 		{MeetingTranscriptionStatusStreaming, MeetingTranscriptionStatusFinishing, true},
 		{MeetingTranscriptionStatusFinishing, MeetingTranscriptionStatusSucceeded, true},

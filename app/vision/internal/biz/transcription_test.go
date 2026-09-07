@@ -53,12 +53,12 @@ func (r *transcriptionFakeRepo) Get(_ context.Context, sessionID, meetingID stri
 	return cloneTranscriptionSession(session), nil
 }
 
-func (r *transcriptionFakeRepo) ListStalePending(_ context.Context, before time.Time, limit int) ([]*TranscriptionSession, error) {
+func (r *transcriptionFakeRepo) ListStaleNonTerminal(_ context.Context, before time.Time, limit int) ([]*TranscriptionSession, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	result := make([]*TranscriptionSession, 0, limit)
 	for _, session := range r.sessions {
-		if session.Status == TranscriptionSessionStatusPending && !session.UpdatedAt.After(before) {
+		if !session.Status.IsTerminal() && !session.UpdatedAt.After(before) {
 			result = append(result, cloneTranscriptionSession(session))
 			if len(result) == limit {
 				break
@@ -66,6 +66,26 @@ func (r *transcriptionFakeRepo) ListStalePending(_ context.Context, before time.
 		}
 	}
 	return result, nil
+}
+
+func (r *transcriptionFakeRepo) ExpireStale(_ context.Context, sessionID string, before time.Time) (*TranscriptionSession, bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	session, ok := r.sessions[sessionID]
+	if !ok {
+		return nil, false, ErrTranscriptionNotFound
+	}
+	if session.Status.IsTerminal() || session.UpdatedAt.After(before) {
+		return cloneTranscriptionSession(session), false, nil
+	}
+	if !session.Status.CanTransitionTo(TranscriptionSessionStatusExpired) {
+		return nil, false, ErrTranscriptionStateConflict
+	}
+	now := time.Now().UTC()
+	session.Status = TranscriptionSessionStatusExpired
+	session.FinishedAt = &now
+	session.UpdatedAt = now
+	return cloneTranscriptionSession(session), true, nil
 }
 
 func (r *transcriptionFakeRepo) Transition(_ context.Context, sessionID string, allowed []TranscriptionSessionStatus, next TranscriptionSessionStatus, failureCode string) (*TranscriptionSession, error) {
@@ -231,7 +251,7 @@ func (s *transcriptionFakeFinalSink) StoreFinalSegments(context.Context, *Transc
 
 type transcriptionFakeUsageSink struct{ calls int }
 
-func (s *transcriptionFakeUsageSink) ReportTranscriptionUsage(context.Context, *TranscriptionSession, time.Duration) error {
+func (s *transcriptionFakeUsageSink) ReportTranscriptionUsage(context.Context, *TranscriptionSession, time.Duration, time.Time) error {
 	s.calls++
 	return nil
 }
@@ -400,6 +420,9 @@ func TestTranscriptionUsecaseLifecycleIsIdempotent(t *testing.T) {
 	if !duplicate.Duplicate || asr.pushes != 1 {
 		t.Fatalf("PushAudio() duplicate = %v, provider pushes = %d", duplicate.Duplicate, asr.pushes)
 	}
+	if err := uc.ReportUsage(context.Background(), first.Session.ID, time.Now()); err != nil {
+		t.Fatalf("ReportUsage() error = %v", err)
+	}
 	if _, err := uc.Finish(context.Background(), first.Session.ID); err != nil {
 		t.Fatalf("Finish() error = %v", err)
 	}
@@ -446,7 +469,7 @@ func TestTranscriptionUsecaseCancelAndProviderFailure(t *testing.T) {
 	}
 }
 
-func TestTranscriptionUsecaseExpiresOnlyStalePendingSessions(t *testing.T) {
+func TestTranscriptionUsecaseExpiresStaleNonTerminalSessions(t *testing.T) {
 	repo := newTranscriptionFakeRepo()
 	tickets := &transcriptionFakeTickets{}
 	provider := &transcriptionFakeProvider{session: &transcriptionFakeASRSession{}}
@@ -462,6 +485,18 @@ func TestTranscriptionUsecaseExpiresOnlyStalePendingSessions(t *testing.T) {
 	repo.sessions[stale.Session.ID].UpdatedAt = time.Now().Add(-2 * time.Minute)
 	repo.mu.Unlock()
 
+	staleStreamingInput := validPrepareTranscriptionInput()
+	staleStreaming, err := uc.Prepare(context.Background(), staleStreamingInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.Start(context.Background(), staleStreaming.Session.ID, staleStreamingInput.MeetingID); err != nil {
+		t.Fatal(err)
+	}
+	repo.mu.Lock()
+	repo.sessions[staleStreaming.Session.ID].UpdatedAt = time.Now().Add(-2 * time.Minute)
+	repo.mu.Unlock()
+
 	activeInput := validPrepareTranscriptionInput()
 	active, err := uc.Prepare(context.Background(), activeInput)
 	if err != nil {
@@ -471,13 +506,17 @@ func TestTranscriptionUsecaseExpiresOnlyStalePendingSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expired, err := uc.ExpireStalePending(context.Background(), time.Now().Add(-time.Minute), 100)
-	if err != nil || expired != 1 {
-		t.Fatalf("ExpireStalePending() = (%d, %v), want (1, nil)", expired, err)
+	expired, err := uc.ExpireStaleSessions(context.Background(), time.Now().Add(-time.Minute), 100)
+	if err != nil || expired != 2 {
+		t.Fatalf("ExpireStaleSessions() = (%d, %v), want (2, nil)", expired, err)
 	}
 	staleSnapshot, err := uc.Get(context.Background(), stale.Session.ID, stale.Session.MeetingID)
 	if err != nil || staleSnapshot.Status != TranscriptionSessionStatusExpired {
 		t.Fatalf("stale session = (%#v, %v)", staleSnapshot, err)
+	}
+	staleStreamingSnapshot, err := uc.Get(context.Background(), staleStreaming.Session.ID, staleStreamingInput.MeetingID)
+	if err != nil || staleStreamingSnapshot.Status != TranscriptionSessionStatusExpired {
+		t.Fatalf("stale streaming session = (%#v, %v)", staleStreamingSnapshot, err)
 	}
 	activeSnapshot, err := uc.Get(context.Background(), active.Session.ID, activeInput.MeetingID)
 	if err != nil || activeSnapshot.Status != TranscriptionSessionStatusStreaming {

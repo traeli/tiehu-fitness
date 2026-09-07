@@ -34,6 +34,12 @@ func (*blockingOutboxRepo) RetryTranscriptionDelivery(context.Context, string, t
 
 type unusedCoreMeetingSink struct{}
 
+type batchProcessorFunc func(context.Context, time.Time) (int, error)
+
+func (f batchProcessorFunc) ProcessBatch(ctx context.Context, now time.Time) (int, error) {
+	return f(ctx, now)
+}
+
 func (unusedCoreMeetingSink) AppendFinalTranscriptSegments(context.Context, string, *biz.TranscriptionSession, []biz.TranscriptSegment) error {
 	return nil
 }
@@ -66,7 +72,7 @@ func TestServerStopCancelsRunningBatchAndWaitsForExit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewServer(uc, time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server, err := NewServer(uc, time.Second, nil, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +85,67 @@ func TestServerStopCancelsRunningBatchAndWaitsForExit(t *testing.T) {
 	case <-repo.started:
 	case <-time.After(time.Second):
 		t.Fatal("worker did not start its first batch")
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := server.Stop(stopCtx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-startResult:
+		if err != nil {
+			t.Fatalf("Start() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Start did not return after Stop")
+	}
+}
+
+func TestServerSlowSummaryDoesNotBlockTranscriptionDelivery(t *testing.T) {
+	transcriptionCalls := make(chan struct{}, 4)
+	summaryStarted := make(chan struct{})
+	transcription := batchProcessorFunc(func(context.Context, time.Time) (int, error) {
+		select {
+		case transcriptionCalls <- struct{}{}:
+		default:
+		}
+		return 1, nil
+	})
+	summary := batchProcessorFunc(func(ctx context.Context, _ time.Time) (int, error) {
+		select {
+		case <-summaryStarted:
+		default:
+			close(summaryStarted)
+		}
+		<-ctx.Done()
+		return 0, ctx.Err()
+	})
+	server, err := NewServer(
+		transcription,
+		10*time.Millisecond,
+		summary,
+		10*time.Millisecond,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	startResult := make(chan error, 1)
+	go func() {
+		startResult <- server.Start(context.Background())
+	}()
+
+	select {
+	case <-summaryStarted:
+	case <-time.After(time.Second):
+		t.Fatal("summary worker did not start")
+	}
+	for call := 0; call < 2; call++ {
+		select {
+		case <-transcriptionCalls:
+		case <-time.After(time.Second):
+			t.Fatal("slow summary blocked transcription delivery")
+		}
 	}
 	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

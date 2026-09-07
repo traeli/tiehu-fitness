@@ -21,6 +21,7 @@ type TranscriptionRepo struct {
 
 var _ biz.TranscriptionSessionRepo = (*TranscriptionRepo)(nil)
 var _ biz.ASRAttemptRepo = (*TranscriptionRepo)(nil)
+var _ biz.StaleTranscriptionRepo = (*TranscriptionRepo)(nil)
 
 func NewTranscriptionRepo(db *gorm.DB) (*TranscriptionRepo, error) {
 	if db == nil {
@@ -71,25 +72,103 @@ func (r *TranscriptionRepo) CreateOrGet(ctx context.Context, session *biz.Transc
 	return mapped, wasCreated, err
 }
 
-func (r *TranscriptionRepo) ListStalePending(ctx context.Context, before time.Time, limit int) ([]*biz.TranscriptionSession, error) {
+func (r *TranscriptionRepo) ListStaleNonTerminal(ctx context.Context, before time.Time, limit int) ([]*biz.TranscriptionSession, error) {
 	if ctx == nil || before.IsZero() || limit <= 0 || limit > 1_000 {
-		return nil, fmt.Errorf("stale pending transcription query is invalid")
+		return nil, fmt.Errorf("stale transcription query is invalid")
 	}
 	var rows []model.TranscriptionSession
 	if err := r.db.WithContext(ctx).
-		Where("status = ? AND updated_at <= ?", biz.TranscriptionSessionStatusPending, before.UTC()).
+		Where("status IN ? AND updated_at <= ?", []string{
+			string(biz.TranscriptionSessionStatusPending),
+			string(biz.TranscriptionSessionStatusConnecting),
+			string(biz.TranscriptionSessionStatusStreaming),
+			string(biz.TranscriptionSessionStatusFinishing),
+		}, before.UTC()).
 		Order("updated_at ASC, id ASC").Limit(limit).Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list stale pending transcription sessions: %w", err)
+		return nil, fmt.Errorf("list stale transcription sessions: %w", err)
 	}
 	sessions := make([]*biz.TranscriptionSession, 0, len(rows))
 	for index := range rows {
 		session, err := transcriptionModelToBiz(&rows[index])
 		if err != nil {
-			return nil, fmt.Errorf("map stale pending transcription session: %w", err)
+			return nil, fmt.Errorf("map stale transcription session: %w", err)
 		}
 		sessions = append(sessions, session)
 	}
 	return sessions, nil
+}
+
+func (r *TranscriptionRepo) ExpireStale(ctx context.Context, sessionID string, before time.Time) (*biz.TranscriptionSession, bool, error) {
+	if ctx == nil || before.IsZero() {
+		return nil, false, fmt.Errorf("stale transcription expiry input is invalid")
+	}
+	var result *biz.TranscriptionSession
+	expired := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row model.TranscriptionSession
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", sessionID).First(&row).Error; err != nil {
+			return translateTranscriptionDBError("lock stale transcription session", err)
+		}
+		current, err := biz.ParseTranscriptionSessionStatus(row.Status)
+		if err != nil {
+			return fmt.Errorf("parse stored transcription status: %w", err)
+		}
+		if current.IsTerminal() || row.UpdatedAt.After(before.UTC()) {
+			result, err = transcriptionModelToBiz(&row)
+			return err
+		}
+		if !current.CanTransitionTo(biz.TranscriptionSessionStatusExpired) {
+			return biz.ErrTranscriptionStateConflict
+		}
+		now := time.Now().UTC()
+		if err := tx.Model(&row).Updates(map[string]any{
+			"status": string(biz.TranscriptionSessionStatusExpired), "failure_code": "",
+			"finished_at": now, "updated_at": now,
+		}).Error; err != nil {
+			return fmt.Errorf("expire stale transcription session: %w", err)
+		}
+		var job model.ASRJob
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_id = ?", row.ID).First(&job).Error; err != nil {
+			return translateTranscriptionDBError("lock stale ASR job", err)
+		}
+		if err := tx.Model(&model.AIJobAttempt{}).
+			Where("job_id = ? AND status = ?", job.ID, string(biz.ASRAttemptStatusProcessing)).
+			Updates(map[string]any{
+				"status": string(biz.ASRAttemptStatusCancelled), "error_code": "SESSION_EXPIRED", "finished_at": now,
+			}).Error; err != nil {
+			return fmt.Errorf("cancel stale ASR attempts: %w", err)
+		}
+		jobStatus, err := biz.ParseASRJobStatus(job.Status)
+		if err != nil {
+			return fmt.Errorf("parse stored ASR job status: %w", err)
+		}
+		if jobStatus == biz.ASRJobStatusPending || jobStatus == biz.ASRJobStatusProcessing {
+			if err := tx.Model(&job).Updates(map[string]any{
+				"status": string(biz.ASRJobStatusCancelled), "updated_at": now,
+			}).Error; err != nil {
+				return fmt.Errorf("cancel stale ASR job: %w", err)
+			}
+		}
+		payload, err := transcriptionOutboxPayload(row.ID, row.MeetingID)
+		if err != nil {
+			return err
+		}
+		outbox := model.TranscriptionOutbox{
+			SessionID: row.ID, EventType: string(biz.TranscriptionOutboxEventTypeUsageReady), Payload: payload,
+			Status: string(biz.TranscriptionOutboxStatusPending), AvailableAt: now, CreatedAt: now, UpdatedAt: now,
+		}
+		if err := tx.Create(&outbox).Error; err != nil {
+			return fmt.Errorf("persist stale transcription outbox: %w", err)
+		}
+		row.Status = string(biz.TranscriptionSessionStatusExpired)
+		row.FailureCode = ""
+		row.FinishedAt = &now
+		row.UpdatedAt = now
+		result, err = transcriptionModelToBiz(&row)
+		expired = err == nil
+		return err
+	})
+	return result, expired, err
 }
 
 func (r *TranscriptionRepo) StartAttempt(ctx context.Context, sessionID string, provider biz.ASRProviderName) (*biz.ASRAttempt, error) {

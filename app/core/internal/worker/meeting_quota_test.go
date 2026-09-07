@@ -12,7 +12,7 @@ import (
 
 type quotaWorkerRepo struct{ listed chan struct{} }
 
-func (*quotaWorkerRepo) ReportUsage(context.Context, string, string, int64, time.Time) (*biz.MeetingUsageReservation, error) {
+func (*quotaWorkerRepo) ReportUsage(context.Context, biz.MeetingQuotaReportInput) (*biz.MeetingUsageReservation, error) {
 	return nil, nil
 }
 func (*quotaWorkerRepo) Finalize(context.Context, biz.MeetingQuotaFinalizeInput) (*biz.MeetingUsageRecord, error) {
