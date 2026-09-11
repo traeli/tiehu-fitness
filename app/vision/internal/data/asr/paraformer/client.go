@@ -22,7 +22,10 @@ import (
 	"github.com/tiehu-ai/tiehu-fitness/app/vision/internal/biz"
 )
 
-const maxProviderEventBytes = int64(1 << 20)
+const (
+	maxProviderEventBytes = int64(1 << 20)
+	paraformerRealtimeV1  = "paraformer-realtime-v1"
+)
 
 var (
 	errProviderProtocol = errors.New("invalid provider protocol")
@@ -115,6 +118,9 @@ func (p *Provider) Start(ctx context.Context, session *biz.TranscriptionSession,
 	}
 	if err := spec.Validate(); err != nil {
 		return nil, providerError(ErrorCodeProtocol, err)
+	}
+	if p.cfg.Model == paraformerRealtimeV1 && session.Language == biz.MeetingLanguageEnUS {
+		return nil, providerError(ErrorCodeProtocol, fmt.Errorf("paraformer realtime v1 does not support English transcription"))
 	}
 	hints, err := languageHints(session.Language)
 	if err != nil {

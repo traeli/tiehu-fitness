@@ -178,6 +178,79 @@ func TestProviderRuntimeDoesNotExpireWhileWaitingForRecognitionEvent(t *testing.
 	assertServerError(t, serverErrors)
 }
 
+func TestProviderV1RejectsEnglishBeforeConnecting(t *testing.T) {
+	cfg := testConfig("ws://127.0.0.1:1", 4)
+	cfg.Model = paraformerRealtimeV1
+	provider, err := NewProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	_, err = provider.Start(context.Background(), testBusinessSession(biz.MeetingLanguageEnUS), testAudioSpec())
+	assertProviderErrorCode(t, err, ErrorCodeProtocol)
+}
+
+func TestProviderV1UsesCompatibleRunTaskPayload(t *testing.T) {
+	serverErrors := make(chan error, 1)
+	endpoint, closeServer := fakeProviderServer(t, func(conn *websocket.Conn, _ *http.Request) error {
+		var start map[string]any
+		if err := conn.ReadJSON(&start); err != nil {
+			return err
+		}
+		payload, ok := start["payload"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("run-task payload is missing")
+		}
+		if payload["model"] != paraformerRealtimeV1 {
+			return fmt.Errorf("unexpected model %v", payload["model"])
+		}
+		parameters, ok := payload["parameters"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("run-task parameters are missing")
+		}
+		if parameters["phrase_id"] != "test-phrase" {
+			return fmt.Errorf("unexpected phrase_id %v", parameters["phrase_id"])
+		}
+		for _, field := range []string{"vocabulary_id", "language_hints"} {
+			if _, exists := parameters[field]; exists {
+				return fmt.Errorf("v1 run-task unexpectedly contains %s", field)
+			}
+		}
+		header, ok := start["header"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("run-task header is missing")
+		}
+		taskID, ok := header["task_id"].(string)
+		if !ok || taskID == "" {
+			return fmt.Errorf("run-task task_id is invalid")
+		}
+		if err := writeServerEvent(conn, taskID, "task-started", nil); err != nil {
+			return err
+		}
+		var finish finishTask
+		if err := conn.ReadJSON(&finish); err != nil {
+			return err
+		}
+		return writeServerEvent(conn, taskID, "task-finished", nil)
+	}, serverErrors)
+	defer closeServer()
+
+	cfg := testConfig(endpoint, 4)
+	cfg.Model = paraformerRealtimeV1
+	cfg.VocabularyID = "test-phrase"
+	provider, err := NewProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	session, err := provider.Start(context.Background(), testBusinessSession(biz.MeetingLanguageZhCN), testAudioSpec())
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if _, err := session.Finish(context.Background()); err != nil {
+		t.Fatalf("Finish() error = %v", err)
+	}
+	assertServerError(t, serverErrors)
+}
+
 func TestProviderStartTaskFailureDoesNotLeakSecret(t *testing.T) {
 	serverErrors := make(chan error, 1)
 	endpoint, closeServer := fakeProviderServer(t, func(conn *websocket.Conn, _ *http.Request) error {

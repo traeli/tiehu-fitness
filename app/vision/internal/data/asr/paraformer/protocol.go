@@ -24,6 +24,7 @@ type runTaskParameters struct {
 	Format                          string   `json:"format"`
 	SampleRate                      int32    `json:"sample_rate"`
 	VocabularyID                    string   `json:"vocabulary_id,omitempty"`
+	PhraseID                        string   `json:"phrase_id,omitempty"`
 	LanguageHints                   []string `json:"language_hints,omitempty"`
 	SemanticPunctuationEnabled      bool     `json:"semantic_punctuation_enabled"`
 	PunctuationPredictionEnabled    bool     `json:"punctuation_prediction_enabled"`
@@ -70,15 +71,24 @@ type providerUsage struct {
 }
 
 func newRunTask(taskID string, cfg Config, languageHints []string) runTask {
+	parameters := runTaskParameters{
+		Format: "pcm", SampleRate: 16_000,
+		SemanticPunctuationEnabled: true, PunctuationPredictionEnabled: true,
+		InverseTextNormalizationEnabled: true, DisfluencyRemovalEnabled: false, Heartbeat: true,
+	}
+	if cfg.Model == paraformerRealtimeV1 {
+		// Paraformer v1 accepts phrase_id and is Chinese-only. In particular,
+		// language_hints and vocabulary_id are v2 parameters and must be omitted.
+		parameters.PhraseID = cfg.VocabularyID
+	} else {
+		parameters.VocabularyID = cfg.VocabularyID
+		parameters.LanguageHints = languageHints
+	}
 	message := runTask{
 		Header: taskHeader{Action: "run-task", TaskID: taskID, Streaming: "duplex"},
 		Payload: runTaskPayload{
 			TaskGroup: "audio", Task: "asr", Function: "recognition", Model: cfg.Model,
-			Parameters: runTaskParameters{
-				Format: "pcm", SampleRate: 16_000, VocabularyID: cfg.VocabularyID, LanguageHints: languageHints,
-				SemanticPunctuationEnabled: true, PunctuationPredictionEnabled: true,
-				InverseTextNormalizationEnabled: true, DisfluencyRemovalEnabled: false, Heartbeat: true,
-			},
+			Parameters: parameters,
 		},
 	}
 	return message
