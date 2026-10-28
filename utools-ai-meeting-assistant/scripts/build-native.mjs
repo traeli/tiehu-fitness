@@ -38,3 +38,15 @@ if (result.error) {
 if (result.status !== 0) {
   throw new Error(`Native audio build failed with exit code ${String(result.status)}`);
 }
+
+const transcriptionResult = spawnSync(
+  process.execPath,
+  [path.join(projectDirectory, "scripts", "setup-local-transcription.mjs")],
+  { cwd: projectDirectory, stdio: "inherit", shell: false },
+);
+if (transcriptionResult.error) {
+  throw transcriptionResult.error;
+}
+if (transcriptionResult.status !== 0) {
+  throw new Error(`Local transcription build failed with exit code ${String(transcriptionResult.status)}`);
+}

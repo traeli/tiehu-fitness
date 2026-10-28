@@ -14,5 +14,4 @@ function normalizeApiBaseUrl(raw: string): string {
 export const appConfig = Object.freeze({
   apiBaseUrl: normalizeApiBaseUrl(rawApiBaseUrl),
   useMockApi: import.meta.env.VITE_USE_MOCK_API !== "false",
-  useSyntheticAudio: import.meta.env.VITE_USE_SYNTHETIC_AUDIO === "true",
 });

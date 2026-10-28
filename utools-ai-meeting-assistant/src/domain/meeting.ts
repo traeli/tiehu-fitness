@@ -12,13 +12,6 @@ export type ClientMeetingPhase =
   | MeetingStatus
   | "stopping";
 
-export type MeetingSummaryStatus =
-  | "not_started"
-  | "pending"
-  | "processing"
-  | "succeeded"
-  | "failed";
-
 export interface TranscriptSegment {
   id: string;
   sequenceNo: number;
@@ -29,29 +22,28 @@ export interface TranscriptSegment {
   isFinal: boolean;
 }
 
-export interface ActionItem {
-  assignee?: string;
+export interface MeetingActionItem {
+  assignee: string;
   task: string;
-  dueText?: string;
+  dueText: string;
+  status: "pending";
 }
 
-export interface MeetingSummary {
-  meetingId?: string;
-  version?: number;
-  sourceTranscriptRevision?: number;
+export type MeetingSummaryProvider = "ollama" | "openai" | "deepseek";
+
+export interface LocalMeetingSummary {
   topic: string;
   abstract: string;
   keyDiscussions: string[];
   decisions: string[];
-  actionItems: ActionItem[];
+  actionItems: MeetingActionItem[];
   risks: string[];
-  generatedAt?: string;
-}
-
-export interface MeetingSummaryResult {
-  status: MeetingSummaryStatus;
-  summary?: MeetingSummary;
-  failureReason?: string;
+  provider: MeetingSummaryProvider;
+  model: string;
+  promptVersion: "meeting-summary-v2-local";
+  generatedAt: string;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export interface AudioConstraints {
@@ -65,30 +57,7 @@ export interface MeetingSession {
   meetingId: string;
   status: MeetingStatus;
   startedAt: string;
-  websocketUrl?: string;
-  sessionTicket?: string;
   audio: AudioConstraints;
-}
-
-export interface MeetingResult {
-  meetingId: string;
-  status: MeetingStatus;
-  summary?: MeetingSummary;
-  summaryStatus?: MeetingSummaryStatus;
-}
-
-export interface MeetingQuota {
-  periodStart: string;
-  periodEnd: string;
-  baseLimitSeconds: number;
-  purchasedLimitSeconds: number;
-  totalLimitSeconds: number;
-  consumedSeconds: number;
-  reservedSeconds: number;
-  remainingSeconds: number;
-  maxMeetingSeconds: number;
-  maxConcurrentMeetings: number;
-  activeMeetings: number;
 }
 
 const terminalStatuses: ReadonlySet<ClientMeetingPhase> = new Set([
@@ -112,30 +81,4 @@ export function canStopMeeting(phase: ClientMeetingPhase): boolean {
 
 export function requiresMeetingCleanup(phase: ClientMeetingPhase): boolean {
   return phase === "starting" || phase === "recording" || phase === "stopping";
-}
-
-export function formatQuotaDuration(seconds: number): string {
-  if (!Number.isSafeInteger(seconds) || seconds <= 0) {
-    return "0 分钟";
-  }
-  if (seconds < 60) {
-    return "不足 1 分钟";
-  }
-  const hours = Math.floor(seconds / 3_600);
-  const minutes = Math.floor((seconds % 3_600) / 60);
-  const parts: string[] = [];
-  if (hours > 0) {
-    parts.push(`${hours} 小时`);
-  }
-  if (minutes > 0) {
-    parts.push(`${minutes} 分钟`);
-  }
-  return parts.join(" ");
-}
-
-// The API's remaining balance excludes quota reserved by an active meeting.
-// Reservation is an internal concurrency guard, not consumed user quota, so
-// the user-facing balance includes it until the meeting is settled.
-export function getDisplayRemainingQuotaSeconds(quota: MeetingQuota): number {
-  return Math.max(0, quota.remainingSeconds + quota.reservedSeconds);
 }

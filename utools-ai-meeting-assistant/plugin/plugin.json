@@ -12,7 +12,7 @@
   "features": [
     {
       "code": "meeting-assistant",
-      "explain": "开始会议、实时转写并生成 AI 纪要",
+      "explain": "Windows 与 macOS 本地录音、实时转写，音频不上传",
       "icon": "assets/logo.png",
       "cmds": ["会议助手", "AI会议助手", "会议记录"]
     }

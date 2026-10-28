@@ -13,6 +13,8 @@ const maxRecordingBytes = 256 * 1024 * 1024;
 
 interface StoredMeetingRecording extends LocalMeetingRecording {
   audio: Blob;
+  transcript: SaveLocalMeetingRecording["transcript"];
+  summary?: import("@/domain/meeting").LocalMeetingSummary;
 }
 
 export class IndexedDBRecordingRepository implements RecordingRepository {
@@ -75,6 +77,46 @@ export class IndexedDBRecordingRepository implements RecordingRepository {
         throw new Error("本地录音不存在或数据格式无效");
       }
       return stored.audio;
+    } finally {
+      database.close();
+    }
+  }
+
+  async loadTranscript(id: string): Promise<SaveLocalMeetingRecording["transcript"]> {
+    const stored = await this.loadStoredRecording(id);
+    return Array.isArray(stored.transcript) ? stored.transcript.slice() : [];
+  }
+
+  async loadSummary(id: string): Promise<import("@/domain/meeting").LocalMeetingSummary | undefined> {
+    return (await this.loadStoredRecording(id)).summary;
+  }
+
+  async saveSummary(id: string, summary: import("@/domain/meeting").LocalMeetingSummary): Promise<void> {
+    const stored = await this.loadStoredRecording(id);
+    const database = await openDatabase();
+    try {
+      await transactionResult(database, "readwrite", (store) => store.put({ ...stored, summary }));
+    } finally {
+      database.close();
+    }
+  }
+
+  private async loadStoredRecording(id: string): Promise<StoredMeetingRecording> {
+    if (!id) {
+      throw new Error("录音 ID 不能为空");
+    }
+    const database = await openDatabase();
+    try {
+      const stored = await new Promise<unknown>((resolve, reject) => {
+        const transaction = database.transaction(recordingStore, "readonly");
+        const request = transaction.objectStore(recordingStore).get(id);
+        request.addEventListener("error", () => reject(request.error ?? new Error("读取本地录音失败")));
+        request.addEventListener("success", () => resolve(request.result));
+      });
+      if (!isStoredRecording(stored)) {
+        throw new Error("本地录音不存在或数据格式无效");
+      }
+      return stored;
     } finally {
       database.close();
     }
@@ -152,7 +194,8 @@ function isStoredRecording(value: unknown): value is StoredMeetingRecording {
     typeof recording.durationMs === "number" &&
     typeof recording.mimeType === "string" &&
     typeof recording.sizeBytes === "number" &&
-    recording.audio instanceof Blob
+    recording.audio instanceof Blob &&
+    (recording.transcript === undefined || Array.isArray(recording.transcript))
   );
 }
 

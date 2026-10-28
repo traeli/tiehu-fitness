@@ -1,60 +1,29 @@
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
 
-import {
-  getMeetingGateway,
-  getRecordingRepository,
-  requiresBrowserAuthentication,
-} from "@/application/runtime";
-import {
-  MeetingCompletionError,
-  waitForMeetingCompletion,
-} from "@/application/meetingCompletion";
-import {
-  toMeetingError,
-  type MeetingErrorInfo,
-} from "@/application/meetingError";
-import { nextSummaryPollDelay } from "@/application/summaryPolling";
-import { renderSummaryMarkdown } from "@/application/summaryMarkdown";
-import { appConfig } from "@/config";
-import {
-  canStartMeeting,
-  canStopMeeting,
-  requiresMeetingCleanup,
-  type ClientMeetingPhase,
-  type MeetingSession,
-  type MeetingQuota,
-  type MeetingStatus,
-  type MeetingSummary,
-  type MeetingSummaryStatus,
-  type TranscriptSegment,
-} from "@/domain/meeting";
-import {
-  BrowserMeetingAudioRecorder,
-  type AudioRecorder,
-  type CapturedAudio,
-} from "@/infrastructure/audio/microphoneRecorder";
-import { SyntheticPCMRecorder } from "@/infrastructure/audio/syntheticRecorder";
+import { getRecordingRepository } from "@/application/runtime";
+import { modelDownloadPercent, resolveLocalEngineSetupState, type LocalModelOperationPhase } from "@/application/localEngine";
+import { toMeetingError, type MeetingErrorInfo } from "@/application/meetingError";
+import { canStartMeeting, canStopMeeting, type ClientMeetingPhase, type LocalMeetingSummary, type MeetingSession, type MeetingSummaryProvider, type TranscriptSegment } from "@/domain/meeting";
+import { BrowserMeetingAudioRecorder, type AudioRecorder, type CapturedAudio } from "@/infrastructure/audio/microphoneRecorder";
 import { getDesktopBridge } from "@/infrastructure/desktop/desktopBridge";
-import {
-  TranscriptionClient,
-  type RealtimeConnectionState,
-} from "@/infrastructure/realtime/transcriptionClient";
 import type { LocalMeetingRecording } from "@/infrastructure/recording/recordingRepository";
+import { LocalTranscriber } from "@/infrastructure/transcription/localTranscriber";
+import { summarizeMeeting } from "@/infrastructure/summary/ollamaMeetingSummarizer";
 
-const recordingDetailTimeoutMs = 20_000;
-const recordingSummaryTrackingTimeoutMs = 120_000;
+const localAudio = {
+  mimeType: "audio/pcm;rate=16000",
+  sampleRate: 16_000,
+  channels: 1,
+  chunkDurationMs: 200,
+} as const;
 
 export const useMeetingStore = defineStore("meeting", () => {
   const phase = ref<ClientMeetingPhase>("idle");
   const session = ref<MeetingSession>();
   const transcript = ref<TranscriptSegment[]>([]);
-  const summary = ref<MeetingSummary>();
   const elapsedSeconds = ref(0);
   const meetingError = ref<MeetingErrorInfo>();
-  const quota = ref<MeetingQuota>();
-  const quotaLoading = ref(false);
-  const quotaError = ref<string>();
   const startOperationPending = ref(false);
   const stopOperationPending = ref(false);
   const captureSystemAudio = ref(window.meetingDesktop !== undefined);
@@ -62,54 +31,71 @@ export const useMeetingStore = defineStore("meeting", () => {
   const systemAudioLevel = ref(0);
   const mixedAudioLevel = ref(0);
   const systemAudioSignalSeen = ref(false);
-  const transcriptionConsent = ref(false);
-  const connectionState = ref<RealtimeConnectionState>("idle");
   const runtimeInfo = ref(getDesktopBridge().getRuntimeInfo());
-  const pluginVisibility = ref<"visible" | "hidden">("visible");
   const recordings = ref<LocalMeetingRecording[]>([]);
   const recordingsLoading = ref(false);
   const recordingDirectory = ref(getDesktopBridge().getRecordingDirectory());
   const selectedRecordingID = ref<string>();
   const recordingPlaybackURL = ref<string>();
   const recordingTranscript = ref<TranscriptSegment[]>([]);
-  const recordingMeetingStatus = ref<MeetingStatus>();
-  const recordingSummary = ref<MeetingSummary>();
-  const recordingSummaryStatus = ref<MeetingSummaryStatus>("not_started");
-  const recordingSummaryFailure = ref<string>();
-  const recordingSummaryRegenerating = ref(false);
   const recordingDetailLoading = ref(false);
   const recordingDetailError = ref<string>();
+  const recordingSummary = ref<LocalMeetingSummary>();
+  const summaryGenerating = ref(false);
+  const summaryError = ref<string>();
+  const ollamaModels = ref<string[]>([]);
+  const ollamaChecking = ref(false);
+  const summaryProvider = ref<MeetingSummaryProvider>(readSummaryProvider());
+  const ollamaBaseURL = ref(window.localStorage.getItem("tiehu.meeting.ollama-url") || "http://127.0.0.1:11434");
+  const ollamaModel = ref(window.localStorage.getItem("tiehu.meeting.ollama-model") || "deepseek-r1:7b");
+  const openAIBaseURL = "https://api.openai.com/v1";
+  const openAIModel = ref(window.localStorage.getItem("tiehu.meeting.openai-model") || "gpt-4o-mini");
+  const openAIApiKey = ref("");
+  const deepSeekBaseURL = "https://api.deepseek.com";
+  const deepSeekModel = ref(window.localStorage.getItem("tiehu.meeting.deepseek-model") || "deepseek-flash");
+  const deepSeekApiKey = ref("");
+  const summaryCustomPrompt = ref(window.localStorage.getItem("tiehu.meeting.summary-prompt") || "");
+  const engineStatus = ref<LocalTranscriptionStatus>();
+  const selectedTranscriptionModelId = ref<LocalTranscriptionModelID>(readTranscriptionModelID());
+  const engineLoading = ref(false);
+  const modelDownloadReceivedBytes = ref(0);
+  const modelDownloadTotalBytes = ref(0);
+  const modelOperationPhase = ref<LocalModelOperationPhase>("idle");
+  const modelDownloadFailed = ref(false);
 
   let recorder: AudioRecorder | undefined;
-  let transcriptionClient: TranscriptionClient | undefined;
+  let localTranscriber: LocalTranscriber | undefined;
   let elapsedTimer: number | undefined;
-  let mockTimers: number[] = [];
   let unsubscribeLifecycle: (() => void) | undefined;
-  let recordingSelectionVersion = 0;
-  let recordingSummaryPollTimer: number | undefined;
-  let currentSummaryTrackingVersion = 0;
-  let quotaRecoveryTimer: number | undefined;
-  let quotaRefreshVersion = 0;
-  let startOperationVersion = 0;
-  let stopIdempotencyKey: string | undefined;
-  let lifecycleCleanupPromise: Promise<void> | undefined;
   let pageHideListenerInstalled = false;
 
-  const canStart = computed(
-    () => canStartMeeting(phase.value) && !startOperationPending.value && !stopOperationPending.value,
+  watch(summaryProvider, (value) => window.localStorage.setItem("tiehu.meeting.summary-provider", value));
+  watch(ollamaBaseURL, (value) => window.localStorage.setItem("tiehu.meeting.ollama-url", value));
+  watch(ollamaModel, (value) => window.localStorage.setItem("tiehu.meeting.ollama-model", value));
+  watch(openAIModel, (value) => window.localStorage.setItem("tiehu.meeting.openai-model", value));
+  watch(deepSeekModel, (value) => window.localStorage.setItem("tiehu.meeting.deepseek-model", value));
+  watch(summaryCustomPrompt, (value) => window.localStorage.setItem("tiehu.meeting.summary-prompt", value));
+  watch(selectedTranscriptionModelId, (value) => window.localStorage.setItem("tiehu.meeting.transcription-model", value));
+
+  const canStart = computed(() =>
+    canStartMeeting(phase.value) &&
+    !startOperationPending.value &&
+    !stopOperationPending.value &&
+    engineStatus.value?.binaryAvailable === true &&
+    engineStatus.value.modelDownloaded,
   );
-  const canStop = computed(() => canStopMeeting(phase.value));
-  const statusText = computed(() => {
-    if (phase.value === "starting" && connectionState.value === "connecting") {
-      return "正在连接实时转写";
-    }
-    if (phase.value === "recording" && connectionState.value === "disconnected") {
-      return "录制中 · 转写连接中断";
-    }
-    return statusLabels[phase.value];
-  });
-  const connectionStatusText = computed(() => connectionStatusLabels[connectionState.value]);
+  const canStop = computed(() => phase.value === "recording" && canStopMeeting(phase.value));
+  const statusText = computed(() => statusLabels[phase.value]);
   const durationText = computed(() => formatDuration(elapsedSeconds.value));
+  const engineSetupState = computed(() => resolveLocalEngineSetupState({
+    status: engineStatus.value,
+    operationPhase: modelOperationPhase.value,
+    failed: modelDownloadFailed.value,
+  }));
+  const modelDownloadProgress = computed(() => modelDownloadPercent(
+    modelDownloadReceivedBytes.value,
+    modelDownloadTotalBytes.value,
+  ));
 
   function initializeRuntime(): void {
     runtimeInfo.value = getDesktopBridge().getRuntimeInfo();
@@ -120,493 +106,157 @@ export const useMeetingStore = defineStore("meeting", () => {
       window.addEventListener("pagehide", handlePageHide);
       pageHideListenerInstalled = true;
     }
-    void refreshRecordings();
-    if (!requiresBrowserAuthentication()) {
-      void refreshQuota();
-    }
+    void Promise.all([refreshRecordings(), refreshEngineStatus(), refreshOllamaModels(false)]);
   }
 
   function disposeRuntime(): void {
-    currentSummaryTrackingVersion += 1;
     unsubscribeLifecycle?.();
     unsubscribeLifecycle = undefined;
     if (pageHideListenerInstalled) {
       window.removeEventListener("pagehide", handlePageHide);
       pageHideListenerInstalled = false;
     }
-    transcriptionClient?.close();
-    clearQuotaRecoveryTimer();
-    void cleanupMeetingForLifecycle(false);
+    clearElapsedTimer();
+    localTranscriber?.close();
+    localTranscriber = undefined;
+    void recorder?.stop().catch((error: unknown) => console.error("stop recorder on dispose", error));
+    recorder = undefined;
     clearRecordingSelection();
   }
 
-  async function startMeeting(): Promise<void> {
-    if (!canStart.value) {
-      return;
+  async function refreshEngineStatus(): Promise<void> {
+    try {
+      engineStatus.value = await getDesktopBridge().getLocalTranscriptionStatus({ modelId: selectedTranscriptionModelId.value });
+      modelDownloadFailed.value = false;
+    } catch (error) {
+      meetingError.value = localError(error, "读取本地转写组件失败");
     }
-    if (!transcriptionConsent.value) {
+  }
+
+  async function downloadModel(): Promise<void> {
+    if (engineLoading.value) return;
+    engineLoading.value = true;
+    modelOperationPhase.value = "downloading";
+    modelDownloadReceivedBytes.value = 0;
+    modelDownloadTotalBytes.value = engineStatus.value?.modelSizeBytes ?? 0;
+    modelDownloadFailed.value = false;
+    meetingError.value = undefined;
+    try {
+      engineStatus.value = await getDesktopBridge().downloadLocalTranscriptionModel({ modelId: selectedTranscriptionModelId.value }, (progress) => {
+        modelOperationPhase.value = progress.phase;
+        modelDownloadReceivedBytes.value = Math.max(0, progress.receivedBytes);
+        modelDownloadTotalBytes.value = Math.max(0, progress.totalBytes);
+      });
+      await refreshEngineStatus();
+      if (engineStatus.value?.binaryAvailable !== true || !engineStatus.value.modelDownloaded) {
+        throw new Error("本地语音模型下载完成，但运行状态校验未通过");
+      }
+      getDesktopBridge().notify("本地语音模型已准备完成");
+    } catch (error) {
+      modelDownloadFailed.value = true;
+      const mapped = localError(error, "本地模型下载失败");
       meetingError.value = {
-        code: "UNKNOWN_ERROR",
-        title: "需要确认云端转写",
-        message: "请先确认音频会临时传输到云端进行语音识别。",
-        retryable: false,
+        ...mapped,
+        code: "LOCAL_MODEL_DOWNLOAD_FAILED",
+        retryable: true,
       };
+    } finally {
+      modelOperationPhase.value = "idle";
+      engineLoading.value = false;
+    }
+  }
+
+  async function selectTranscriptionModel(modelId: LocalTranscriptionModelID): Promise<void> {
+    if (engineLoading.value || ["starting", "recording", "stopping", "processing"].includes(phase.value)) return;
+    const modelExists = engineStatus.value?.models.some((model) => model.id === modelId) ?? true;
+    if (!modelExists) return;
+    selectedTranscriptionModelId.value = modelId;
+    modelDownloadFailed.value = false;
+    meetingError.value = undefined;
+    await refreshEngineStatus();
+  }
+
+  async function startMeeting(): Promise<void> {
+    if (!canStart.value) return;
+    if (!captureSystemAudio.value && !captureMicrophone.value) {
+      meetingError.value = localError(new Error("请至少选择一个音频来源"), "无法开始录音");
       return;
     }
     resetMeetingView();
     startOperationPending.value = true;
     phase.value = "starting";
-    const operationVersion = ++startOperationVersion;
-
-    let gateway: Awaited<ReturnType<typeof getMeetingGateway>> | undefined;
+    const meetingID = crypto.randomUUID();
+    session.value = {
+      meetingId: meetingID,
+      status: "recording",
+      startedAt: new Date().toISOString(),
+      audio: localAudio,
+    };
     try {
-      gateway = await getMeetingGateway();
-      assertStartOperationActive(operationVersion);
-      const created = await gateway.createMeeting({
-        language: "auto",
-        // Raw audio is persisted only in the user's local recording folder.
-        // The backend currently stores transcripts and summaries, not a
-        // cloud-playable recording object.
-        retainAudio: false,
-        transcriptionConsent: transcriptionConsent.value,
-        idempotencyKey: crypto.randomUUID(),
-      });
-      session.value = created;
-      stopIdempotencyKey = crypto.randomUUID();
-      assertStartOperationActive(operationVersion);
-      void refreshQuota();
-
-      if (created.websocketUrl && created.sessionTicket) {
-        transcriptionClient = new TranscriptionClient({
-          url: created.websocketUrl,
-          sessionTicket: created.sessionTicket,
-          audio: created.audio,
-          onSegment: upsertTranscriptSegment,
-          onError: (error) => {
-            meetingError.value = toMeetingError(error);
-          },
-          onConnectionStateChange: (state) => {
-            connectionState.value = state;
-            if ((state === "disconnected" || state === "closed") && phase.value === "starting") {
-              const failure = meetingError.value ?? toMeetingError(
-                new Error("实时转写连接已经结束"),
-                "start",
-              );
-              meetingError.value = failure;
-              const startingRecorder = recorder;
-              recorder = undefined;
-              void startingRecorder?.stop().catch((error: unknown) => {
-                console.error("stop audio capture after startup connection loss", error);
-              });
-              return;
-            }
-            if ((state === "disconnected" || state === "closed") && phase.value === "recording") {
-              const failure = meetingError.value ?? toMeetingError(
-                new Error("实时转写连接已经结束"),
-                "stop",
-              );
-              window.setTimeout(() => {
-                if (phase.value !== "recording") {
-                  return;
-                }
-                void performStopMeeting().finally(() => {
-                  meetingError.value = failure;
-                });
-              }, 0);
-            }
-          },
-        });
-        await transcriptionClient.connect();
-        assertStartOperationActive(operationVersion);
-      } else {
-        connectionState.value = "connected";
-      }
-
-      recorder = appConfig.useSyntheticAudio
-        ? new SyntheticPCMRecorder(created.audio)
-        : new BrowserMeetingAudioRecorder(
-            created.audio,
-            {
-              captureSystemAudio: captureSystemAudio.value,
-              captureMicrophone: captureMicrophone.value,
-            },
-            getDesktopBridge(),
-          );
-      await withTimeout(recorder.start((chunk, capturedAt) => {
-        transcriptionClient?.sendAudioChunk(chunk, capturedAt);
-      }, (error) => {
-        const captureFailure = toMeetingError(error, "stop");
-        meetingError.value = captureFailure;
-        window.setTimeout(() => {
-          if (phase.value === "recording") {
-            void performStopMeeting().finally(() => {
-              meetingError.value = captureFailure;
-            });
+      localTranscriber = new LocalTranscriber(getDesktopBridge(), selectedTranscriptionModelId.value, upsertTranscriptSegment);
+      await localTranscriber.start();
+      recorder = new BrowserMeetingAudioRecorder(localAudio, {
+        captureSystemAudio: captureSystemAudio.value,
+        captureMicrophone: captureMicrophone.value,
+      }, getDesktopBridge());
+      await recorder.start(
+        (chunk) => localTranscriber?.push(chunk),
+        (error) => {
+          meetingError.value = localError(error, "音频采集已中断");
+          void stopMeeting();
+        },
+        (source, level) => {
+          if (source === "system") {
+            systemAudioLevel.value = level.peak;
+            if (level.peak >= 0.0001) systemAudioSignalSeen.value = true;
+          } else {
+            mixedAudioLevel.value = level.peak;
           }
-        }, 0);
-      }, (source, level) => {
-        if (source === "system") {
-          systemAudioLevel.value = level.peak;
-          if (level.peak >= 0.0001) {
-            systemAudioSignalSeen.value = true;
-          }
-          return;
-        }
-        mixedAudioLevel.value = level.peak;
-      }), 45_000, "启动本地音频采集超时");
-      assertStartOperationActive(operationVersion);
-
+        },
+      );
       phase.value = "recording";
-      if (created.websocketUrl && connectionState.value !== "connected") {
-        const connectionFailure = meetingError.value ?? toMeetingError(
-          new Error("实时转写连接已经结束"),
-          "stop",
-        );
-        window.setTimeout(() => {
-          if (phase.value !== "recording") {
-            return;
-          }
-          void performStopMeeting().finally(() => {
-            meetingError.value = connectionFailure;
-          });
-        }, 0);
-        return;
-      }
-      startElapsedTimer();
-      if (appConfig.useMockApi) {
-        scheduleMockTranscript();
-      }
+      elapsedTimer = window.setInterval(() => { elapsedSeconds.value += 1; }, 1_000);
     } catch (error) {
-      const interruptedByLifecycle = operationVersion !== startOperationVersion;
-      try {
-        await cleanupCapture(false);
-      } catch (cleanupError) {
-        console.error("cleanup audio capture after startup failure", cleanupError);
-      }
-      if (gateway && session.value) {
-        try {
-          await gateway.stopMeeting(session.value.meetingId, stopIdempotencyKey ?? crypto.randomUUID());
-        } catch (compensationError) {
-          console.error("stop meeting after audio capture startup failure", {
-            meetingId: session.value.meetingId,
-            error: compensationError,
-          });
-        }
-      }
-      phase.value = interruptedByLifecycle ? "cancelled" : "failed";
-      meetingError.value = interruptedByLifecycle
-        ? undefined
-        : (meetingError.value ?? toMeetingError(error, "start"));
-      void refreshQuota();
+      localTranscriber?.close();
+      localTranscriber = undefined;
+      await recorder?.stop().catch(() => undefined);
+      recorder = undefined;
+      phase.value = "failed";
+      meetingError.value = localError(error, "本地会议启动失败", true);
     } finally {
       startOperationPending.value = false;
     }
   }
 
   async function stopMeeting(): Promise<void> {
-    return performStopMeeting();
-  }
-
-  async function performStopMeeting(): Promise<void> {
-    if (!canStop.value) {
-      return;
-    }
-    const cancellingStartup = phase.value === "starting";
-    if (cancellingStartup) {
-      // Invalidate every continuation in startMeeting. If the create request
-      // finishes after this point, its catch path compensates by stopping the
-      // newly-created server meeting with the same idempotency key.
-      startOperationVersion += 1;
-    }
+    if (!canStop.value || stopOperationPending.value) return;
     stopOperationPending.value = true;
-    meetingError.value = undefined;
     phase.value = "stopping";
-    clearTimers();
-
+    clearElapsedTimer();
+    const activeRecorder = recorder;
+    const activeTranscriber = localTranscriber;
+    recorder = undefined;
+    localTranscriber = undefined;
     try {
-      let captureError: unknown;
-      try {
-        await cleanupCapture(true);
-      } catch (error) {
-        captureError = error;
-      }
-      if (!session.value) {
-        phase.value = "cancelled";
-        void refreshQuota();
-        return;
-      }
+      const capturedAudio = await activeRecorder?.stop();
       phase.value = "processing";
-      const gateway = await getMeetingGateway();
-      const stopped = await gateway.stopMeeting(
-        session.value.meetingId,
-        stopIdempotencyKey ?? (stopIdempotencyKey = crypto.randomUUID()),
-      );
-      phase.value = stopped.status;
-      void refreshQuota();
-      getDesktopBridge().notify("本地录音已保存，会议纪要将在后台生成");
-      if (stopped.status === "processing") {
-        void trackMeetingCompletion(gateway, stopped);
-      } else if (stopped.summary) {
-        summary.value = stopped.summary;
-      } else if (canGenerateSummary(stopped.status)) {
-        startCurrentSummaryTracking(gateway, stopped.meetingId);
+      await activeTranscriber?.finish();
+      if (capturedAudio && session.value) {
+        await saveRecording(session.value.meetingId, capturedAudio);
       }
-      if (captureError !== undefined) {
-        const mapped = toMeetingError(captureError);
-        meetingError.value = {
-          ...mapped,
-          title: "本地录音保存失败",
-          message: `${mapped.message} 会议停止流程已继续完成。`,
-          retryable: false,
-        };
-      }
+      phase.value = "completed";
+      getDesktopBridge().notify("本地录音和转写已保存");
     } catch (error) {
-      phase.value = "cancelled";
-      void refreshQuota();
-      const mapped = toMeetingError(error, "stop");
+      activeTranscriber?.close();
+      phase.value = "failed";
+      const mapped = localError(error, "停止或保存本地会议失败");
       meetingError.value = {
         ...mapped,
-        title: "会议处理已取消",
-        message:
-          error instanceof MeetingCompletionError
-            ? error.message
-            : `${mapped.message} 已停止等待会议处理结果。`,
+        code: "LOCAL_MEETING_FINALIZATION_FAILED",
         retryable: false,
-        failedAction: undefined,
       };
     } finally {
       stopOperationPending.value = false;
-      mockTimers.forEach((timer) => window.clearTimeout(timer));
-      mockTimers = [];
-    }
-  }
-
-  async function trackMeetingCompletion(
-    gateway: Awaited<ReturnType<typeof getMeetingGateway>>,
-    initial: { meetingId: string; status: MeetingStatus },
-  ): Promise<void> {
-    try {
-      const result = await waitForMeetingCompletion(gateway, initial, { timeoutMs: 60_000 });
-      if (session.value?.meetingId !== initial.meetingId) {
-        return;
-      }
-      phase.value = result.status;
-      void refreshQuota();
-      if (canGenerateSummary(result.status)) {
-        startCurrentSummaryTracking(gateway, initial.meetingId);
-      }
-    } catch (error) {
-      console.warn("background meeting completion polling stopped", {
-        meetingId: initial.meetingId,
-        error,
-      });
-      if (session.value?.meetingId !== initial.meetingId || phase.value !== "processing") {
-        return;
-      }
-      phase.value = "cancelled";
-      void refreshQuota();
-      const mapped = toMeetingError(error);
-      meetingError.value = {
-        ...mapped,
-        title: "会议处理已取消",
-        message:
-          error instanceof MeetingCompletionError
-            ? error.message
-            : `${mapped.message} 已停止等待会议处理结果。`,
-        retryable: false,
-        failedAction: undefined,
-      };
-      getDesktopBridge().notify("会议处理未完成，已停止生成纪要");
-    }
-  }
-
-  async function exportMarkdown(): Promise<void> {
-    if (!summary.value) {
-      return;
-    }
-    try {
-      const content = renderSummaryMarkdown(summary.value);
-      const safeTopic = summary.value.topic.trim() || "meeting-summary";
-      await getDesktopBridge().saveMarkdown({
-        suggestedName: `${safeTopic}.md`,
-        content,
-      });
-    } catch (error) {
-      meetingError.value = toMeetingError(error, "export");
-    }
-  }
-
-  async function deleteRecording(recordingID: string): Promise<void> {
-    try {
-      await withTimeout(
-        getRecordingRepository().delete(recordingID),
-        10_000,
-        "删除本地录音超时",
-      );
-      if (selectedRecordingID.value === recordingID) {
-        clearRecordingSelection();
-      }
-      await refreshRecordings();
-    } catch (error) {
-      meetingError.value = {
-        ...toMeetingError(error),
-        title: "删除录音失败",
-        retryable: false,
-      };
-    }
-  }
-
-  async function retryFailedAction(): Promise<void> {
-    const failedAction = meetingError.value?.failedAction;
-    if (!meetingError.value?.retryable || !failedAction) {
-      return;
-    }
-    if (failedAction === "start") {
-      meetingError.value = undefined;
-      await startMeeting();
-      return;
-    }
-    if (failedAction === "stop") {
-      meetingError.value = undefined;
-      return;
-    }
-    meetingError.value = undefined;
-    await exportMarkdown();
-  }
-
-  function dismissError(): void {
-    meetingError.value = undefined;
-  }
-
-  function upsertTranscriptSegment(segment: TranscriptSegment): void {
-    const index = transcript.value.findIndex(
-      (item) => item.id === segment.id || item.sequenceNo === segment.sequenceNo,
-    );
-    if (index >= 0) {
-      transcript.value.splice(index, 1, segment);
-    } else {
-      transcript.value.push(segment);
-      transcript.value.sort((left, right) => left.sequenceNo - right.sequenceNo);
-    }
-  }
-
-  function resetMeetingView(): void {
-    clearTimers();
-    clearQuotaRecoveryTimer();
-    currentSummaryTrackingVersion += 1;
-    session.value = undefined;
-    transcript.value = [];
-    summary.value = undefined;
-    elapsedSeconds.value = 0;
-    meetingError.value = undefined;
-    connectionState.value = "idle";
-    systemAudioLevel.value = 0;
-    mixedAudioLevel.value = 0;
-    systemAudioSignalSeen.value = false;
-    stopIdempotencyKey = undefined;
-  }
-
-  function assertStartOperationActive(operationVersion: number): void {
-    if (operationVersion !== startOperationVersion) {
-      throw new Error("会议启动已因插件退出而取消");
-    }
-  }
-
-  function handlePageHide(): void {
-    transcriptionClient?.close();
-    void cleanupMeetingForLifecycle(false);
-  }
-
-  function cleanupMeetingForLifecycle(graceful: boolean): Promise<void> {
-    if (lifecycleCleanupPromise) {
-      return lifecycleCleanupPromise;
-    }
-    if (!requiresMeetingCleanup(phase.value)) {
-      return Promise.resolve();
-    }
-    startOperationVersion += 1;
-    clearTimers();
-    const activeSession = session.value;
-    const activeStopKey = stopIdempotencyKey ?? crypto.randomUUID();
-    stopIdempotencyKey = activeStopKey;
-    phase.value = "stopping";
-    lifecycleCleanupPromise = (async () => {
-      try {
-        await cleanupCapture(graceful);
-      } catch (error) {
-        console.error("cleanup capture after plugin exit failed", error);
-      }
-      if (!activeSession) {
-        phase.value = "cancelled";
-        return;
-      }
-      try {
-        const gateway = await getMeetingGateway();
-        const stopped = await gateway.stopMeeting(activeSession.meetingId, activeStopKey);
-        phase.value = stopped.status;
-      } catch (error) {
-        phase.value = "cancelled";
-        console.error("stop meeting after plugin exit failed", {
-          meetingId: activeSession.meetingId,
-          error,
-        });
-      } finally {
-        void refreshQuota();
-      }
-    })().finally(() => {
-      lifecycleCleanupPromise = undefined;
-    });
-    return lifecycleCleanupPromise;
-  }
-
-  async function cleanupCapture(graceful: boolean): Promise<void> {
-    const activeRecorder = recorder;
-    const activeClient = transcriptionClient;
-    recorder = undefined;
-    transcriptionClient = undefined;
-    let cleanupError: unknown;
-    let capturedAudio: CapturedAudio | undefined;
-    try {
-      capturedAudio = await withTimeout(
-        activeRecorder?.stop() ?? Promise.resolve(undefined),
-        10_000,
-        "停止本地录音超时",
-      );
-    } catch (error) {
-      cleanupError = error;
-    }
-    const finalizationTasks: Promise<unknown>[] = [];
-    if (graceful && capturedAudio && session.value) {
-      finalizationTasks.push(withTimeout(
-        saveRecording(session.value.meetingId, capturedAudio),
-        10_000,
-        "保存本地录音超时",
-      ));
-    }
-    if (graceful) {
-      finalizationTasks.push(withTimeout(
-        activeClient?.finish() ?? Promise.resolve(),
-        17_000,
-        "等待实时转写结束超时",
-      ));
-    } else {
-      activeClient?.close();
-    }
-    const finalizationResults = await Promise.allSettled(finalizationTasks);
-    for (const result of finalizationResults) {
-      if (result.status === "rejected") {
-        cleanupError ??= result.reason;
-      }
-    }
-    try {
-      if (!graceful || cleanupError !== undefined) {
-        activeClient?.close();
-      }
-    } finally {
-      connectionState.value = "closed";
-    }
-    if (cleanupError !== undefined) {
-      throw cleanupError;
     }
   }
 
@@ -615,9 +265,10 @@ export const useMeetingStore = defineStore("meeting", () => {
       id: crypto.randomUUID(),
       meetingId: meetingID,
       createdAt: new Date().toISOString(),
-      durationMs: Math.round(capturedAudio.durationMs),
+      durationMs: Math.max(1, Math.round(capturedAudio.durationMs)),
       mimeType: capturedAudio.mimeType,
       audio: capturedAudio.blob,
+      transcript: transcript.value.slice(),
     });
     await refreshRecordings();
   }
@@ -625,465 +276,256 @@ export const useMeetingStore = defineStore("meeting", () => {
   async function refreshRecordings(): Promise<void> {
     recordingsLoading.value = true;
     try {
-      const stored = await withTimeout(
-        getRecordingRepository().list(),
-        10_000,
-        "读取本地录音列表超时",
-      );
-      recordings.value = stored;
-      if (
-        selectedRecordingID.value &&
-        !stored.some((recording) => recording.id === selectedRecordingID.value)
-      ) {
-        clearRecordingSelection();
-      }
+      recordings.value = await getRecordingRepository().list();
     } catch (error) {
-      meetingError.value = {
-        ...toMeetingError(error),
-        title: "读取录音失败",
-        retryable: false,
-      };
+      meetingError.value = localError(error, "读取本地会议失败");
     } finally {
       recordingsLoading.value = false;
     }
   }
 
-  function startCurrentSummaryTracking(
-    gateway: Awaited<ReturnType<typeof getMeetingGateway>>,
-    meetingID: string,
-  ): void {
-    const trackingVersion = ++currentSummaryTrackingVersion;
-    void trackCurrentSummary(gateway, meetingID, trackingVersion);
-  }
-
-  async function trackCurrentSummary(
-    gateway: Awaited<ReturnType<typeof getMeetingGateway>>,
-    meetingID: string,
-    trackingVersion: number,
-  ): Promise<void> {
-    const deadline = Date.now() + 120_000;
-    let failedAttempts = 0;
-    while (
-      Date.now() < deadline &&
-      trackingVersion === currentSummaryTrackingVersion &&
-      session.value?.meetingId === meetingID &&
-      pluginVisibility.value === "visible"
-    ) {
-      try {
-        const result = await gateway.getMeetingSummary(meetingID, AbortSignal.timeout(5_000));
-        if (
-          trackingVersion !== currentSummaryTrackingVersion ||
-          session.value?.meetingId !== meetingID
-        ) {
-          return;
-        }
-        if (result.status === "succeeded") {
-          summary.value = result.summary;
-          getDesktopBridge().notify("会议纪要已生成");
-          return;
-        }
-        if (result.status === "failed") {
-          getDesktopBridge().notify("会议转写已保存，会议纪要生成失败");
-          return;
-        }
-        failedAttempts = 0;
-      } catch (error) {
-        failedAttempts += 1;
-        console.warn("refresh current meeting summary", { meetingId: meetingID, error });
-      }
-      await delay(Math.min(10_000, 2_000 * 2 ** Math.min(failedAttempts, 2)));
-    }
-  }
-
-  async function refreshQuota(): Promise<void> {
-    const refreshVersion = ++quotaRefreshVersion;
-    quotaLoading.value = true;
-    quotaError.value = undefined;
-    try {
-      const gateway = await getMeetingGateway();
-      const current = await gateway.getMeetingQuota();
-      if (refreshVersion === quotaRefreshVersion) {
-        quota.value = current;
-        scheduleQuotaRecoveryRefresh(current);
-      }
-    } catch (error) {
-      if (refreshVersion === quotaRefreshVersion) {
-        quotaError.value = describeError(error);
-        if (quota.value) {
-          scheduleQuotaRecoveryRefresh(quota.value);
-        }
-      }
-    } finally {
-      if (refreshVersion === quotaRefreshVersion) {
-        quotaLoading.value = false;
-      }
-    }
-  }
-
   async function selectRecording(recordingID: string): Promise<void> {
-    if (!recordings.value.some((recording) => recording.id === recordingID)) {
-      return;
-    }
-    const selectionVersion = ++recordingSelectionVersion;
-    revokeRecordingPlaybackURL();
+    if (!recordings.value.some((recording) => recording.id === recordingID)) return;
+    clearRecordingSelection();
     selectedRecordingID.value = recordingID;
-    recordingTranscript.value = [];
-    recordingMeetingStatus.value = undefined;
-    recordingSummary.value = undefined;
-    recordingSummaryStatus.value = "not_started";
-    recordingSummaryFailure.value = undefined;
-    recordingDetailError.value = undefined;
     recordingDetailLoading.value = true;
-
-    const recording = recordings.value.find((item) => item.id === recordingID);
-    if (!recording) {
-      recordingDetailLoading.value = false;
-      return;
-    }
-    const audioResultPromise = withTimeout(
-      Promise.resolve().then(() => getRecordingRepository().loadAudio(recordingID)),
-      10_000,
-      "读取本地录音超时",
-    );
-    const meetingGatewayPromise = getMeetingGateway();
-    const detailSignal = AbortSignal.timeout(recordingDetailTimeoutMs);
-    const meetingResultPromise = (async () => {
-      const gateway = await meetingGatewayPromise;
-      return Promise.all([
-        gateway.getMeeting(recording.meetingId, detailSignal),
-        gateway.listTranscriptSegments(recording.meetingId, detailSignal),
-      ]);
-    })();
-    const summaryResultPromise = (async () => {
-      const gateway = await meetingGatewayPromise;
-      return gateway.getMeetingSummary(recording.meetingId, detailSignal);
-    })();
-    const [audioResult, meetingResult, summaryResult] = await Promise.allSettled([
-      audioResultPromise,
-      meetingResultPromise,
-      summaryResultPromise,
-    ]);
-    if (selectionVersion !== recordingSelectionVersion) {
-      return;
-    }
-
-    const errors: string[] = [];
-    if (audioResult.status === "fulfilled") {
-      recordingPlaybackURL.value = URL.createObjectURL(audioResult.value);
-    } else {
-      errors.push(`读取录音失败：${describeError(audioResult.reason)}`);
-    }
-    if (meetingResult.status === "fulfilled") {
-      const [meeting, segments] = meetingResult.value;
-      recordingMeetingStatus.value = meeting.status;
-      recordingTranscript.value = segments;
-    } else {
-      errors.push(`读取会议内容失败：${describeError(meetingResult.reason)}`);
-    }
-    if (summaryResult.status === "fulfilled") {
-      recordingSummaryStatus.value = summaryResult.value.status;
-      recordingSummary.value = summaryResult.value.summary;
-      recordingSummaryFailure.value = summaryResult.value.failureReason;
-      if (summaryResult.value.status === "pending" || summaryResult.value.status === "processing") {
-        scheduleRecordingSummaryPoll(recording.meetingId, selectionVersion);
-      }
-    } else {
-      errors.push(`读取会议总结失败：${describeError(summaryResult.reason)}`);
-    }
-    recordingDetailError.value = errors.length > 0 ? errors.join("；") : undefined;
-    recordingDetailLoading.value = false;
-  }
-
-  async function regenerateRecordingSummary(): Promise<void> {
-    const recording = recordings.value.find((item) => item.id === selectedRecordingID.value);
-    if (!recording || recordingSummaryRegenerating.value) {
-      return;
-    }
-    recordingSummaryRegenerating.value = true;
-    recordingSummaryFailure.value = undefined;
+    recordingDetailError.value = undefined;
     try {
-      const gateway = await getMeetingGateway();
-      const result = await gateway.regenerateMeetingSummary(recording.meetingId, crypto.randomUUID());
-      recordingSummaryStatus.value = result.status;
-      scheduleRecordingSummaryPoll(recording.meetingId, recordingSelectionVersion);
+      const [audio, storedTranscript, storedSummary] = await Promise.all([
+        getRecordingRepository().loadAudio(recordingID),
+        getRecordingRepository().loadTranscript(recordingID),
+        getRecordingRepository().loadSummary(recordingID),
+      ]);
+      recordingPlaybackURL.value = URL.createObjectURL(audio);
+      recordingTranscript.value = storedTranscript;
+      recordingSummary.value = storedSummary;
     } catch (error) {
-      recordingSummaryFailure.value = describeError(error);
-      recordingSummaryStatus.value = "failed";
+      recordingDetailError.value = error instanceof Error ? error.message : "读取本地会议失败";
     } finally {
-      recordingSummaryRegenerating.value = false;
+      recordingDetailLoading.value = false;
     }
   }
 
-  function scheduleRecordingSummaryPoll(
-    meetingID: string,
-    selectionVersion: number,
-    failedAttempts = 0,
-    deadline = Date.now() + recordingSummaryTrackingTimeoutMs,
-  ): void {
-    clearRecordingSummaryPoll();
-    const pollDelay = nextSummaryPollDelay(failedAttempts, Date.now(), deadline);
-    if (pollDelay === undefined) {
-      stopRecordingSummaryPolling();
-      return;
-    }
-    recordingSummaryPollTimer = window.setTimeout(async () => {
-      if (selectionVersion !== recordingSelectionVersion) {
-        return;
+  async function refreshOllamaModels(reportError = true): Promise<void> {
+    if (ollamaChecking.value) return;
+    ollamaChecking.value = true;
+    if (reportError) summaryError.value = undefined;
+    try {
+      const models = await getDesktopBridge().listOllamaModels(ollamaBaseURL.value);
+      ollamaModels.value = models;
+      if (!models.includes(ollamaModel.value)) {
+        ollamaModel.value = models.find((model) => model.toLowerCase().includes("deepseek")) ?? models[0] ?? ollamaModel.value;
       }
-      if (Date.now() >= deadline) {
-        stopRecordingSummaryPolling();
-        return;
+      if (reportError && models.length === 0) {
+        summaryError.value = "Ollama 已连接，但尚未安装模型。请先运行 ollama pull deepseek-r1:7b。";
       }
-      try {
-        const gateway = await getMeetingGateway();
-        const result = await gateway.getMeetingSummary(
-          meetingID,
-          AbortSignal.timeout(Math.min(5_000, Math.max(1, deadline - Date.now()))),
-        );
-        if (selectionVersion !== recordingSelectionVersion) {
-          return;
-        }
-        recordingSummaryStatus.value = result.status;
-        recordingSummary.value = result.summary;
-        recordingSummaryFailure.value = result.failureReason;
-        if (result.status === "pending" || result.status === "processing") {
-          scheduleRecordingSummaryPoll(meetingID, selectionVersion, 0, deadline);
-        }
-      } catch (error) {
-        if (selectionVersion === recordingSelectionVersion) {
-          recordingSummaryFailure.value = `刷新会议总结失败：${describeError(error)}`;
-          scheduleRecordingSummaryPoll(meetingID, selectionVersion, failedAttempts + 1, deadline);
-        }
+    } catch (error) {
+      ollamaModels.value = [];
+      if (reportError) summaryError.value = error instanceof Error ? error.message : "无法连接本机 Ollama";
+    } finally {
+      ollamaChecking.value = false;
+    }
+  }
+
+  async function generateRecordingSummary(): Promise<void> {
+    const recordingID = selectedRecordingID.value;
+    if (!recordingID || recordingTranscript.value.length === 0 || summaryGenerating.value) return;
+    summaryGenerating.value = true;
+    summaryError.value = undefined;
+    try {
+      if (summaryProvider.value === "openai" && (!openAIModel.value.trim() || !openAIApiKey.value.trim())) {
+        throw new Error("请填写 OpenAI 模型和 API Key");
       }
-    }, pollDelay);
-  }
-
-  function stopRecordingSummaryPolling(): void {
-    recordingSummaryStatus.value = "failed";
-    recordingSummaryFailure.value = "等待会议总结超时，已停止自动刷新；可以点击重新生成。";
-  }
-
-  function scheduleQuotaRecoveryRefresh(current: MeetingQuota): void {
-    clearQuotaRecoveryTimer();
-    if (
-      current.activeMeetings <= 0 ||
-      phase.value === "starting" ||
-      phase.value === "recording" ||
-      pluginVisibility.value !== "visible"
-    ) {
-      return;
+      if (summaryProvider.value === "deepseek" && (!deepSeekModel.value.trim() || !deepSeekApiKey.value.trim())) {
+        throw new Error("请填写 DeepSeek 模型和 API Key");
+      }
+      const bridge = getDesktopBridge();
+      const provider = summaryProvider.value;
+      const model = provider === "ollama"
+        ? ollamaModel.value
+        : provider === "openai"
+          ? openAIModel.value.trim()
+          : deepSeekModel.value.trim();
+      const generated = await summarizeMeeting({
+        chat: (request) => provider === "ollama"
+          ? bridge.chatOllama({ ...request, baseURL: ollamaBaseURL.value })
+          : bridge.chatOpenAICompatible({
+            ...request,
+            provider,
+            baseURL: provider === "openai" ? openAIBaseURL : deepSeekBaseURL,
+            apiKey: provider === "openai" ? openAIApiKey.value.trim() : deepSeekApiKey.value.trim(),
+            model,
+          }),
+      }, {
+        provider,
+        model,
+        transcript: recordingTranscript.value,
+        customPrompt: summaryCustomPrompt.value,
+      });
+      if (selectedRecordingID.value !== recordingID) return;
+      await getRecordingRepository().saveSummary(recordingID, generated);
+      recordingSummary.value = generated;
+      getDesktopBridge().notify("本地会议总结已生成");
+    } catch (error) {
+      summaryError.value = error instanceof Error ? error.message : "本地会议总结生成失败";
+    } finally {
+      summaryGenerating.value = false;
     }
-    quotaRecoveryTimer = window.setTimeout(() => {
-      quotaRecoveryTimer = undefined;
-      void refreshQuota();
-    }, 5_000);
   }
 
-  function clearQuotaRecoveryTimer(): void {
-    if (quotaRecoveryTimer !== undefined) {
-      window.clearTimeout(quotaRecoveryTimer);
-      quotaRecoveryTimer = undefined;
+  async function deleteRecording(recordingID: string): Promise<void> {
+    try {
+      await getRecordingRepository().delete(recordingID);
+      if (selectedRecordingID.value === recordingID) clearRecordingSelection();
+      await refreshRecordings();
+    } catch (error) {
+      meetingError.value = localError(error, "删除本地会议失败");
     }
   }
 
-  function clearRecordingSummaryPoll(): void {
-    if (recordingSummaryPollTimer !== undefined) {
-      window.clearTimeout(recordingSummaryPollTimer);
-      recordingSummaryPollTimer = undefined;
+  async function exportTranscript(): Promise<void> {
+    const segments = selectedRecordingID.value ? recordingTranscript.value : transcript.value;
+    if (segments.length === 0) return;
+    const lines = segments.map((segment) => {
+      const at = formatDuration(Math.floor(segment.startOffsetMs / 1_000));
+      return `- **${at}** ${segment.content}`;
+    });
+    try {
+      await getDesktopBridge().saveMarkdown({
+        suggestedName: `会议转写-${new Date().toISOString().slice(0, 10)}.md`,
+        content: `# 会议转写\n\n${lines.join("\n")}`,
+      });
+    } catch (error) {
+      meetingError.value = localError(error, "导出转写失败");
     }
+  }
+
+  async function exportSummary(): Promise<void> {
+    const value = recordingSummary.value;
+    if (!value) return;
+    const renderList = (items: string[]) => items.length ? items.map((item) => `- ${item}`).join("\n") : "- 无";
+    const actionItems = value.actionItems.length
+      ? value.actionItems.map((item) => `- ${item.task}${item.assignee ? `（负责人：${item.assignee}）` : ""}${item.dueText ? `（期限：${item.dueText}）` : ""}`).join("\n")
+      : "- 无";
+    const content = `# ${value.topic}\n\n${value.abstract}\n\n## 讨论重点\n\n${renderList(value.keyDiscussions)}\n\n## 决策\n\n${renderList(value.decisions)}\n\n## 行动事项\n\n${actionItems}\n\n## 风险与待确认\n\n${renderList(value.risks)}\n`;
+    try {
+      await getDesktopBridge().saveMarkdown({ suggestedName: `${value.topic}.md`, content });
+    } catch (error) {
+      meetingError.value = localError(error, "导出会议总结失败");
+    }
+  }
+
+  async function retryFailedAction(): Promise<void> {
+    meetingError.value = undefined;
+    if (!engineStatus.value?.modelDownloaded) {
+      await downloadModel();
+    } else {
+      await startMeeting();
+    }
+  }
+
+  function dismissError(): void { meetingError.value = undefined; }
+
+  function upsertTranscriptSegment(segment: TranscriptSegment): void {
+    transcript.value.push(segment);
+    transcript.value.sort((left, right) => left.sequenceNo - right.sequenceNo);
   }
 
   function clearRecordingSelection(): void {
-    recordingSelectionVersion += 1;
-    clearRecordingSummaryPoll();
-    revokeRecordingPlaybackURL();
+    if (recordingPlaybackURL.value) URL.revokeObjectURL(recordingPlaybackURL.value);
+    recordingPlaybackURL.value = undefined;
     selectedRecordingID.value = undefined;
     recordingTranscript.value = [];
-    recordingMeetingStatus.value = undefined;
     recordingSummary.value = undefined;
-    recordingSummaryStatus.value = "not_started";
-    recordingSummaryFailure.value = undefined;
-    recordingSummaryRegenerating.value = false;
+    summaryError.value = undefined;
     recordingDetailError.value = undefined;
     recordingDetailLoading.value = false;
   }
 
-  function revokeRecordingPlaybackURL(): void {
-    if (recordingPlaybackURL.value) {
-      URL.revokeObjectURL(recordingPlaybackURL.value);
-      recordingPlaybackURL.value = undefined;
-    }
+  function resetMeetingView(): void {
+    clearElapsedTimer();
+    transcript.value = [];
+    elapsedSeconds.value = 0;
+    meetingError.value = undefined;
+    systemAudioLevel.value = 0;
+    mixedAudioLevel.value = 0;
+    systemAudioSignalSeen.value = false;
   }
 
-  function startElapsedTimer(): void {
-    elapsedTimer = window.setInterval(() => {
-      elapsedSeconds.value += 1;
-    }, 1_000);
+  function clearElapsedTimer(): void {
+    if (elapsedTimer !== undefined) window.clearInterval(elapsedTimer);
+    elapsedTimer = undefined;
   }
 
-  function scheduleMockTranscript(): void {
-    const samples = [
-      { delay: 900, speaker: "speaker_1", content: "我们先确认 AI 会议助手的 MVP 范围。" },
-      { delay: 2_100, speaker: "speaker_2", content: "首期完成实时转写和 Markdown 纪要导出。" },
-      { delay: 3_400, speaker: "speaker_1", content: "屏幕录制放到下一个版本。" },
-    ];
-    mockTimers = samples.map(({ delay, speaker, content }, index) =>
-      window.setTimeout(() => {
-        upsertTranscriptSegment({
-          id: `mock-${index + 1}`,
-          sequenceNo: index + 1,
-          startOffsetMs: delay,
-          endOffsetMs: delay + 800,
-          speakerLabel: speaker,
-          content,
-          isFinal: true,
-        });
-      }, delay),
-    );
-  }
-
-  function clearTimers(): void {
-    if (elapsedTimer !== undefined) {
-      window.clearInterval(elapsedTimer);
-      elapsedTimer = undefined;
-    }
-    mockTimers.forEach((timer) => window.clearTimeout(timer));
-    mockTimers = [];
+  function handlePageHide(): void {
+    localTranscriber?.close();
+    void recorder?.stop().catch((error: unknown) => console.error("stop recorder on page hide", error));
   }
 
   function handleLifecycleEvent(event: MeetingPluginLifecycleEvent): void {
-    switch (event.type) {
-      case "enter":
-        pluginVisibility.value = "visible";
-        runtimeInfo.value = getDesktopBridge().getRuntimeInfo();
-        void refreshQuota();
-        return;
-      case "detach":
-        runtimeInfo.value = { ...runtimeInfo.value, windowType: "detach" };
-        return;
-      case "out":
-        pluginVisibility.value = "hidden";
-        clearQuotaRecoveryTimer();
-        void cleanupMeetingForLifecycle(true);
-        return;
-    }
+    if (event.type === "enter") return;
+    handlePageHide();
   }
 
   return {
-    phase,
-    transcript,
-    summary,
-    meetingError,
-    quota,
-    quotaLoading,
-    quotaError,
-    captureSystemAudio,
-    captureMicrophone,
-    systemAudioLevel,
-    mixedAudioLevel,
-    systemAudioSignalSeen,
-    transcriptionConsent,
-    connectionState,
-    connectionStatusText,
-    runtimeInfo,
-    pluginVisibility,
-    recordings,
-    recordingsLoading,
-    recordingDirectory,
-    selectedRecordingID,
-    recordingPlaybackURL,
-    recordingTranscript,
-    recordingMeetingStatus,
-    recordingSummary,
-    recordingSummaryStatus,
-    recordingSummaryFailure,
-    recordingSummaryRegenerating,
-    recordingDetailLoading,
-    recordingDetailError,
-    canStart,
-    canStop,
-    statusText,
-    durationText,
-    initializeRuntime,
-    disposeRuntime,
-    startMeeting,
-    stopMeeting,
-    exportMarkdown,
-    selectRecording,
-    regenerateRecordingSummary,
-    deleteRecording,
-    retryFailedAction,
-    dismissError,
-    refreshQuota,
+    phase, session, transcript, elapsedSeconds, meetingError,
+    captureSystemAudio, captureMicrophone, systemAudioLevel, mixedAudioLevel,
+    systemAudioSignalSeen, runtimeInfo, recordings, recordingsLoading,
+    recordingDirectory, selectedRecordingID, recordingPlaybackURL,
+    recordingTranscript, recordingDetailLoading, recordingDetailError,
+    recordingSummary, summaryGenerating, summaryError,
+    summaryProvider, ollamaModels, ollamaChecking, ollamaBaseURL, ollamaModel,
+    openAIModel, openAIApiKey,
+    deepSeekModel, deepSeekApiKey, summaryCustomPrompt,
+    engineStatus, engineLoading, engineSetupState, modelDownloadProgress, selectedTranscriptionModelId,
+    modelDownloadReceivedBytes, modelDownloadTotalBytes,
+    canStart, canStop, statusText, durationText,
+    initializeRuntime, disposeRuntime, refreshEngineStatus, downloadModel, selectTranscriptionModel,
+    startMeeting, stopMeeting, refreshRecordings, selectRecording, refreshOllamaModels,
+    generateRecordingSummary, deleteRecording, exportTranscript, exportSummary,
+    retryFailedAction, dismissError,
   };
 });
 
+function localError(error: unknown, title: string, retryable = false): MeetingErrorInfo {
+  const mapped = toMeetingError(error);
+  return { ...mapped, title, retryable, failedAction: retryable ? "start" : undefined };
+}
+
+function formatDuration(totalSeconds: number): string {
+  const minutes = Math.floor(Math.max(0, totalSeconds) / 60);
+  const seconds = Math.max(0, totalSeconds) % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 const statusLabels: Record<ClientMeetingPhase, string> = {
-  idle: "未开始",
-  starting: "正在启动",
-  recording: "录制中",
-  stopping: "正在停止",
-  processing: "正在完成转写",
-  completed: "已完成",
-  partially_completed: "部分完成",
+  idle: "准备开始",
+  starting: "正在加载本地模型",
+  recording: "本地转写中",
+  stopping: "正在停止录音",
+  processing: "正在完成本地转写",
+  completed: "已保存到本机",
+  partially_completed: "已部分完成",
   failed: "处理失败",
   cancelled: "已取消",
 };
 
-const connectionStatusLabels: Record<RealtimeConnectionState, string> = {
-  idle: "尚未连接",
-  connecting: "正在连接",
-  connected: "实时转写已连接",
-  disconnected: "实时转写已断开",
-  closed: "连接已关闭",
-};
-
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3_600);
-  const minutes = Math.floor((seconds % 3_600) / 60);
-  const remainingSeconds = seconds % 60;
-  return [hours, minutes, remainingSeconds].map((value) => String(value).padStart(2, "0")).join(":");
+function readSummaryProvider(): MeetingSummaryProvider {
+  const stored = window.localStorage.getItem("tiehu.meeting.summary-provider");
+  if (stored === "openai" || stored === "deepseek") return stored;
+  if (stored === "openai-compatible") return "deepseek";
+  return "ollama";
 }
 
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : "未知错误";
-}
-
-function canGenerateSummary(status: MeetingStatus): boolean {
-  return status === "completed" || status === "partially_completed";
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-}
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const timer = window.setTimeout(() => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      reject(new Error(message));
-    }, timeoutMs);
-    promise.then(
-      (value) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
+function readTranscriptionModelID(): LocalTranscriptionModelID {
+  const stored = window.localStorage.getItem("tiehu.meeting.transcription-model");
+  switch (stored) {
+    case "tiny-q5_1":
+    case "base-q5_1":
+    case "small-q5_1":
+    case "medium-q5_0":
+      return stored;
+    default:
+      return "small-q5_1";
+  }
 }

@@ -21,6 +21,9 @@ describe("DesktopFileRecordingRepository", () => {
         },
       ]),
       readRecording: vi.fn(async () => ({ mimeType: "audio/webm", audioData })),
+      readRecordingTranscript: vi.fn(async () => []),
+      readRecordingSummary: vi.fn(async () => null),
+      saveRecordingSummary: vi.fn(async () => undefined),
       deleteRecording: vi.fn(async () => undefined),
     };
     const repository = new DesktopFileRecordingRepository(bridge);
@@ -32,6 +35,7 @@ describe("DesktopFileRecordingRepository", () => {
       durationMs: 1_200,
       mimeType: "audio/webm",
       audio: new Blob([audioData], { type: "audio/webm" }),
+      transcript: [],
     });
     const recordings = await repository.list();
     const audio = await repository.loadAudio("recording-id");

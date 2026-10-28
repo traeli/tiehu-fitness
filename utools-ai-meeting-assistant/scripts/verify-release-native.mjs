@@ -17,8 +17,38 @@ const artifacts = [
     executable: true,
   },
   {
+    platform: "macOS Apple Silicon local transcription",
+    relativePath: path.join("plugin", "native", "darwin-arm64", "tiehu-local-whisper"),
+    magic: Buffer.from([0xca, 0xfe, 0xba, 0xbe]),
+    executable: true,
+  },
+  {
+    platform: "macOS Intel local transcription",
+    relativePath: path.join("plugin", "native", "darwin-x64", "tiehu-local-whisper"),
+    magic: Buffer.from([0xca, 0xfe, 0xba, 0xbe]),
+    executable: true,
+  },
+  {
+    platform: "macOS Apple Silicon Whisper framework",
+    relativePath: path.join("plugin", "native", "darwin-arm64", "whisper.framework", "Versions", "A", "whisper"),
+    magic: Buffer.from([0xca, 0xfe, 0xba, 0xbe]),
+    executable: true,
+  },
+  {
+    platform: "macOS Intel Whisper framework",
+    relativePath: path.join("plugin", "native", "darwin-x64", "whisper.framework", "Versions", "A", "whisper"),
+    magic: Buffer.from([0xca, 0xfe, 0xba, 0xbe]),
+    executable: true,
+  },
+  {
     platform: "Windows x64",
     relativePath: path.join("plugin", "native", "win32-x64", "tiehu-system-audio.exe"),
+    magic: Buffer.from("MZ", "ascii"),
+    executable: false,
+  },
+  {
+    platform: "Windows x64 local transcription",
+    relativePath: path.join("plugin", "native", "win32-x64", "tiehu-local-whisper.exe"),
     magic: Buffer.from("MZ", "ascii"),
     executable: false,
   },
@@ -57,4 +87,4 @@ if (failures.length > 0) {
   throw new Error(`跨平台原生音频发布检查失败：\n- ${failures.join("\n- ")}`);
 }
 
-console.log("跨平台原生音频发布检查通过：macOS arm64、macOS x64、Windows x64。");
+console.log("跨平台原生音频与本地转写发布检查通过：macOS arm64、macOS x64、Windows x64。");

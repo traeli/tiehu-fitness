@@ -6,30 +6,14 @@ import {
   type AuthenticatedUser,
   type WebAuthInput,
 } from "@/infrastructure/api/authGateway";
-import {
-  HttpMeetingGateway,
-  MockMeetingGateway,
-  type MeetingGateway,
-} from "@/infrastructure/api/meetingGateway";
 import { getDesktopBridge } from "@/infrastructure/desktop/desktopBridge";
 import { DesktopFileRecordingRepository } from "@/infrastructure/recording/desktopFileRecordingRepository";
 import { IndexedDBRecordingRepository } from "@/infrastructure/recording/indexedDBRecordingRepository";
 import type { RecordingRepository } from "@/infrastructure/recording/recordingRepository";
 
-let gatewayPromise: Promise<MeetingGateway> | undefined;
 let apiClient: ApiClient | undefined;
 let recordingRepository: RecordingRepository | undefined;
 const deviceIDStorageKey = "tiehu.meeting.device-id";
-
-export function getMeetingGateway(): Promise<MeetingGateway> {
-  gatewayPromise ??= createMeetingGateway().catch((error: unknown) => {
-    // A temporary network or uTools authentication failure must not poison all
-    // later retries for the lifetime of the renderer.
-    gatewayPromise = undefined;
-    throw error;
-  });
-  return gatewayPromise;
-}
 
 export function getRecordingRepository(): RecordingRepository {
   recordingRepository ??= window.meetingDesktop
@@ -53,18 +37,11 @@ export async function authenticateBrowser(
   const gateway = new WebAuthGateway(client);
   const request = { ...input, deviceId: getOrCreateDeviceID() };
   const user = mode === "register" ? await gateway.register(request) : await gateway.login(request);
-  gatewayPromise = Promise.resolve(new HttpMeetingGateway(client));
   return user;
 }
 
-async function createMeetingGateway(): Promise<MeetingGateway> {
-  if (appConfig.useMockApi) {
-    return new MockMeetingGateway();
-  }
-
-  if (requiresBrowserAuthentication()) {
-    throw new Error("请先使用邮箱登录");
-  }
+export async function authenticateDesktop(): Promise<void> {
+  if (appConfig.useMockApi || requiresBrowserAuthentication()) return;
   const client = getApiClient();
   const authGateway = new UToolsAuthGateway(client);
   const authenticate = async () => {
@@ -77,7 +54,6 @@ async function createMeetingGateway(): Promise<MeetingGateway> {
   };
   await authenticate();
   client.setUnauthorizedHandler(authenticate);
-  return new HttpMeetingGateway(client);
 }
 
 function getApiClient(): ApiClient {

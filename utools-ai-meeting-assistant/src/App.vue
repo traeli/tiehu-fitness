@@ -3,40 +3,25 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
 
 import ErrorBanner from "@/components/ErrorBanner.vue";
+import LocalSetupCard from "@/components/LocalSetupCard.vue";
 import MeetingControls from "@/components/MeetingControls.vue";
 import RecordingList from "@/components/RecordingList.vue";
-import SummaryPanel from "@/components/SummaryPanel.vue";
+import SummarySettingsDialog from "@/components/SummarySettingsDialog.vue";
 import TranscriptPanel from "@/components/TranscriptPanel.vue";
-import WebAuthPanel from "@/components/WebAuthPanel.vue";
-import { appConfig } from "@/config";
-import {
-  authenticateBrowser,
-  requiresBrowserAuthentication,
-} from "@/application/runtime";
 import { useMeetingStore } from "@/stores/meeting";
 
 const meeting = useMeetingStore();
 const logoURL = `${import.meta.env.BASE_URL}assets/logo.png`;
-const browserAuthenticationRequired = requiresBrowserAuthentication();
-const authenticatedNickname = ref<string>();
-const authenticationLoading = ref(false);
-const authenticationError = ref<string>();
+const summarySettingsOpen = ref(false);
 const {
   phase,
   transcript,
-  summary,
   meetingError,
-  quota,
-  quotaLoading,
-  quotaError,
   captureSystemAudio,
   captureMicrophone,
   systemAudioLevel,
   mixedAudioLevel,
   systemAudioSignalSeen,
-  transcriptionConsent,
-  connectionState,
-  connectionStatusText,
   runtimeInfo,
   recordings,
   recordingsLoading,
@@ -44,48 +29,57 @@ const {
   selectedRecordingID,
   recordingPlaybackURL,
   recordingTranscript,
-  recordingMeetingStatus,
   recordingSummary,
-  recordingSummaryStatus,
-  recordingSummaryFailure,
-  recordingSummaryRegenerating,
   recordingDetailLoading,
   recordingDetailError,
+  summaryGenerating,
+  summaryError,
+  summaryProvider,
+  ollamaModels,
+  ollamaChecking,
+  ollamaBaseURL,
+  ollamaModel,
+  openAIModel,
+  openAIApiKey,
+  deepSeekModel,
+  deepSeekApiKey,
+  summaryCustomPrompt,
   canStart,
   canStop,
   statusText,
   durationText,
+  engineStatus,
+  engineLoading,
+  selectedTranscriptionModelId,
+  engineSetupState,
+  modelDownloadProgress,
+  modelDownloadReceivedBytes,
+  modelDownloadTotalBytes,
 } = storeToRefs(meeting);
 
 const environmentText = computed(() => {
-  const mode = appConfig.useMockApi ? "Mock" : "API";
-  const audio = appConfig.useSyntheticAudio ? " · 合成 PCM" : "";
-  const identity = authenticatedNickname.value ? ` · ${authenticatedNickname.value}` : "";
-  return `${mode} · ${runtimeInfo.value.windowType}${audio}${identity}`;
+  if (runtimeInfo.value.platform === "browser") return "浏览器预览";
+  return `本机运行 · ${runtimeInfo.value.platform}`;
 });
 const systemAudioAvailable = computed(
   () => runtimeInfo.value.windowType !== "browser" && runtimeInfo.value.platform !== "browser",
 );
-async function handleAuthentication(payload: {
-  mode: "login" | "register";
-  email: string;
-  password: string;
-  nickname?: string;
-}): Promise<void> {
-  authenticationLoading.value = true;
-  authenticationError.value = undefined;
-  try {
-    const user = await authenticateBrowser(payload.mode, payload);
-    authenticatedNickname.value = user.nickname;
-    await meeting.refreshQuota();
-  } catch (error) {
-    authenticationError.value = error instanceof Error ? error.message : "登录失败，请重试";
-  } finally {
-    authenticationLoading.value = false;
+const summaryMethodLabel = computed(() => {
+  if (summaryProvider.value === "ollama") return "本地 Ollama";
+  return summaryProvider.value === "openai" ? "OpenAI" : "DeepSeek";
+});
+const summaryConfigured = computed(() => {
+  if (summaryProvider.value === "ollama") return Boolean(ollamaModel.value.trim());
+  if (summaryProvider.value === "openai") {
+    return Boolean(openAIModel.value.trim() && openAIApiKey.value.trim());
   }
-}
+  return Boolean(deepSeekModel.value.trim() && deepSeekApiKey.value.trim());
+});
+const privacyModeText = computed(() => summaryProvider.value === "ollama" ? "完全本地模式" : "本地转写 · 云端总结");
 
-onMounted(() => meeting.initializeRuntime());
+onMounted(() => {
+  meeting.initializeRuntime();
+});
 onBeforeUnmount(() => meeting.disposeRuntime());
 </script>
 
@@ -97,77 +91,104 @@ onBeforeUnmount(() => meeting.disposeRuntime());
       </div>
       <div>
         <h1>会议助手</h1>
-        <p>让每一次讨论都有清晰结果</p>
+        <p>本地录音与转写，私有、安全、由你掌控。</p>
       </div>
-      <span class="environment-badge">{{ environmentText }}</span>
+      <div class="header-statuses">
+        <span class="environment-badge">{{ environmentText }}</span>
+        <span class="privacy-mode-badge" :class="{ cloud: summaryProvider !== 'ollama' }">{{ privacyModeText }}</span>
+      </div>
+      <button class="header-settings-button" type="button" @click="summarySettingsOpen = true">设置</button>
     </header>
 
-    <WebAuthPanel
-      v-if="browserAuthenticationRequired && !authenticatedNickname"
-      :loading="authenticationLoading"
-      :error="authenticationError"
-      @authenticate="handleAuthentication"
-    />
-
     <ErrorBanner
-      v-else-if="meetingError"
+      v-if="meetingError && meetingError.code !== 'LOCAL_MODEL_DOWNLOAD_FAILED'"
       :error="meetingError"
       @retry="meeting.retryFailedAction"
       @dismiss="meeting.dismissError"
     />
 
-    <div v-if="!browserAuthenticationRequired || authenticatedNickname" class="dashboard-grid">
+    <LocalSetupCard
+      :state="engineSetupState"
+      :model-name="engineStatus?.modelName"
+      :model-size-bytes="engineStatus?.modelSizeBytes"
+      :models="engineStatus?.models ?? []"
+      :selected-model-id="selectedTranscriptionModelId"
+      :received-bytes="modelDownloadReceivedBytes"
+      :total-bytes="modelDownloadTotalBytes"
+      :progress-percent="modelDownloadProgress"
+      :error-message="meetingError?.code === 'LOCAL_MODEL_DOWNLOAD_FAILED' ? meetingError.message : undefined"
+      @download="meeting.downloadModel"
+      @retry="meeting.downloadModel"
+      @select-model="meeting.selectTranscriptionModel"
+    />
+
+    <div class="dashboard-grid">
       <MeetingControls
         v-model:capture-system-audio="captureSystemAudio"
         v-model:capture-microphone="captureMicrophone"
-        v-model:transcription-consent="transcriptionConsent"
         :status-text="statusText"
         :duration-text="durationText"
         :is-recording="phase === 'recording'"
         :can-start="canStart"
         :can-stop="canStop"
-        :connection-status-text="connectionStatusText"
-        :show-connection-status="phase === 'starting' || phase === 'recording' || connectionState === 'disconnected'"
         :system-audio-level="systemAudioLevel"
         :mixed-audio-level="mixedAudioLevel"
         :system-audio-signal-seen="systemAudioSignalSeen"
         :system-audio-available="systemAudioAvailable"
-        :quota="quota"
-        :quota-loading="quotaLoading"
-        :quota-error="quotaError"
         @start="meeting.startMeeting"
         @stop="meeting.stopMeeting"
-        @refresh-quota="meeting.refreshQuota"
       />
       <TranscriptPanel :segments="transcript" :is-recording="phase === 'recording'" />
     </div>
 
     <RecordingList
-      v-if="!browserAuthenticationRequired || authenticatedNickname"
       :recordings="recordings"
       :loading="recordingsLoading"
       :storage-directory="recordingDirectory"
       :selected-recording-i-d="selectedRecordingID"
       :playback-u-r-l="recordingPlaybackURL"
       :transcript="recordingTranscript"
-      :meeting-status="recordingMeetingStatus"
       :summary="recordingSummary"
-      :summary-status="recordingSummaryStatus"
-      :summary-failure="recordingSummaryFailure"
-      :summary-regenerating="recordingSummaryRegenerating"
       :detail-loading="recordingDetailLoading"
       :detail-error="recordingDetailError"
+      :summary-generating="summaryGenerating"
+      :summary-error="summaryError"
+      :summary-method-label="summaryMethodLabel"
+      :summary-configured="summaryConfigured"
       @select="meeting.selectRecording"
       @delete="meeting.deleteRecording"
-      @regenerate-summary="meeting.regenerateRecordingSummary"
+      @export-transcript="meeting.exportTranscript"
+      @configure-summary="summarySettingsOpen = true"
+      @generate-summary="meeting.generateRecordingSummary"
+      @export-summary="meeting.exportSummary"
     />
 
-    <SummaryPanel v-if="(!browserAuthenticationRequired || authenticatedNickname) && summary" :summary="summary" @export="meeting.exportMarkdown" />
+    <SummarySettingsDialog
+      v-if="summarySettingsOpen"
+      v-model:summary-provider="summaryProvider"
+      v-model:ollama-base-u-r-l="ollamaBaseURL"
+      v-model:ollama-model="ollamaModel"
+      v-model:open-a-i-model="openAIModel"
+      v-model:open-a-i-api-key="openAIApiKey"
+      v-model:deep-seek-model="deepSeekModel"
+      v-model:deep-seek-api-key="deepSeekApiKey"
+      v-model:summary-custom-prompt="summaryCustomPrompt"
+      :ollama-models="ollamaModels"
+      :ollama-checking="ollamaChecking"
+      :engine-status="engineStatus"
+      :engine-loading="engineLoading"
+      :selected-model-id="selectedTranscriptionModelId"
+      :model-download-progress="modelDownloadProgress"
+      @refresh-ollama="meeting.refreshOllamaModels"
+      @download-model="meeting.downloadModel"
+      @select-model="meeting.selectTranscriptionModel"
+      @close="summarySettingsOpen = false"
+    />
 
     <footer>
-      <span>音频传输受加密连接保护</span>
+      <span>录音、转写与会议文件默认只留在本机</span>
       <span>·</span>
-      <span>本地录音由你管理，可随时删除</span>
+      <span>{{ summaryProvider === "ollama" ? "本地总结不会离开设备" : `使用 ${summaryMethodLabel} 时仅发送转写文字` }}</span>
     </footer>
   </main>
 </template>

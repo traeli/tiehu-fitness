@@ -1,4 +1,6 @@
-# 客户端接口约定
+# 客户端接口约定（历史云端方案）
+
+> 当前桌面客户端只使用登录接口，本文会议、额度、WebSocket 和云端总结协议均已退出客户端运行链路。
 
 状态：B-300 鉴权基线。用户与会议 HTTP 以 `api/user/v1/user.proto`、`api/meeting/v1/*.proto` 和生成的 `openapi.yaml` 为准；WebSocket v1 以本文和 Paraformer 接入方案为准。
 

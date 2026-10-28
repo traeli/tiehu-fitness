@@ -1,6 +1,5 @@
 import { ApiError, ApiRequestTimeoutError } from "@/infrastructure/api/apiClient";
 import { AudioCaptureError } from "@/infrastructure/audio/microphoneRecorder";
-import { RealtimeTranscriptionError } from "@/infrastructure/realtime/transcriptionClient";
 
 export type FailedMeetingAction = "start" | "stop" | "export";
 
@@ -10,11 +9,10 @@ export type MeetingErrorCode =
   | "SYSTEM_AUDIO_PERMISSION_DENIED"
   | "SYSTEM_AUDIO_UNAVAILABLE"
   | "UTOOLS_AUTH_NOT_CONFIGURED"
-  | "MEETING_QUOTA_EXCEEDED"
-  | "MEETING_CONCURRENT_LIMIT_REACHED"
-  | "TRANSCRIPTION_SESSION_EXPIRED"
-  | "TRANSCRIPTION_SESSION_READY_TIMEOUT"
   | "NETWORK_UNAVAILABLE"
+  | "LOCAL_MODEL_DOWNLOAD_FAILED"
+  | "LOCAL_AUDIO_CONFIGURATION_INVALID"
+  | "LOCAL_MEETING_FINALIZATION_FAILED"
   | "EXPORT_FAILED"
   | "UNKNOWN_ERROR";
 
@@ -60,6 +58,14 @@ export function toMeetingError(
       failedAction,
     };
   }
+  if (error instanceof Error && error.message.includes("实时音频参数")) {
+    return {
+      code: "LOCAL_AUDIO_CONFIGURATION_INVALID",
+      title: "本地音频配置无效",
+      message: error.message,
+      retryable: false,
+    };
+  }
   if (error instanceof ApiError) {
     return mapApiError(error, failedAction);
   }
@@ -71,9 +77,6 @@ export function toMeetingError(
       retryable: true,
       failedAction,
     };
-  }
-  if (error instanceof RealtimeTranscriptionError) {
-    return mapRealtimeError(error, failedAction);
   }
   if (error instanceof TypeError && /fetch|network|load/i.test(error.message)) {
     return {
@@ -110,61 +113,6 @@ function microphonePermissionMessage(): string {
   return "请在 macOS 系统设置中允许 uTools 使用麦克风，然后重试。";
 }
 
-function mapRealtimeError(
-  error: RealtimeTranscriptionError,
-  failedAction?: FailedMeetingAction,
-): MeetingErrorInfo {
-  switch (error.code) {
-    case "TRANSCRIPTION_CONNECTION_FAILED":
-      return {
-        code: "NETWORK_UNAVAILABLE",
-        title: "实时转写连接失败",
-        message: error.message,
-        retryable: true,
-        failedAction,
-      };
-    case "TRANSCRIPTION_SESSION_READY_TIMEOUT":
-      return {
-        code: "TRANSCRIPTION_SESSION_READY_TIMEOUT",
-        title: "实时转写准备超时",
-        message: error.message,
-        retryable: true,
-        failedAction,
-      };
-    case "MEETING_QUOTA_EXCEEDED":
-      return {
-        code: "MEETING_QUOTA_EXCEEDED",
-        title: "本月会议分钟数已用完",
-        message: error.message,
-        retryable: false,
-      };
-    case "MEETING_CONCURRENT_LIMIT_REACHED":
-      return {
-        code: "MEETING_CONCURRENT_LIMIT_REACHED",
-        title: "已有会议尚未结束",
-        message: "上一场会议正在结束或释放额度，请稍后重试。",
-        retryable: true,
-        failedAction,
-      };
-    case "TRANSCRIPTION_SESSION_EXPIRED":
-    case "TRANSCRIPTION_TICKET_INVALID":
-      return {
-        code: "TRANSCRIPTION_SESSION_EXPIRED",
-        title: "实时转写会话不可用",
-        message: error.message,
-        retryable: false,
-      };
-    default:
-      return {
-        code: "UNKNOWN_ERROR",
-        title: "实时转写发生错误",
-        message: error.message,
-        retryable: error.retryable,
-        failedAction,
-      };
-  }
-}
-
 function mapApiError(error: ApiError, failedAction?: FailedMeetingAction): MeetingErrorInfo {
   switch (error.reason) {
     case "UTOOLS_AUTH_NOT_CONFIGURED":
@@ -174,32 +122,10 @@ function mapApiError(error: ApiError, failedAction?: FailedMeetingAction): Meeti
         message: "会议服务缺少当前插件的服务端身份配置，请联系管理员完成配置后重试。",
         retryable: false,
       };
-    case "MEETING_QUOTA_EXCEEDED":
-      return {
-        code: "MEETING_QUOTA_EXCEEDED",
-        title: "本月会议分钟数已用完",
-        message: "当前账号没有可用会议时长，请稍后查看额度或升级方案。",
-        retryable: false,
-      };
-    case "MEETING_CONCURRENT_LIMIT_REACHED":
-      return {
-        code: "MEETING_CONCURRENT_LIMIT_REACHED",
-        title: "已有会议尚未结束",
-        message: "上一场会议正在结束或释放额度，请稍后重试。",
-        retryable: true,
-        failedAction,
-      };
-    case "TRANSCRIPTION_SESSION_EXPIRED":
-      return {
-        code: "TRANSCRIPTION_SESSION_EXPIRED",
-        title: "实时转写会话已过期",
-        message: "本次实时连接无法继续，请安全停止会议后重新开始。",
-        retryable: false,
-      };
     default:
       return {
         code: "UNKNOWN_ERROR",
-        title: "会议服务返回错误",
+        title: "登录服务返回错误",
         message: error.message,
         retryable: error.status >= 500 || error.status === 408 || error.status === 429,
         failedAction,

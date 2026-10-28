@@ -15,7 +15,7 @@ function formatOffset(offsetMs: number): string {
   <section class="meeting-card content-card" aria-labelledby="transcript-title">
     <div class="section-heading">
       <div>
-        <p class="eyebrow">LIVE TRANSCRIPT</p>
+        <p class="eyebrow">本地实时转写</p>
         <h2 id="transcript-title">实时会议内容</h2>
       </div>
       <span v-if="isRecording" class="live-badge">实时</span>
@@ -32,7 +32,7 @@ function formatOffset(offsetMs: number): string {
     </div>
     <div v-else class="empty-state">
       <span class="waveform" aria-hidden="true">▂▄▆▄▂</span>
-      <p>{{ isRecording ? "正在等待第一段语音…" : "开始会议后，转写内容会显示在这里" }}</p>
+      <p>{{ isRecording ? "正在等待语音，请确认会议声音或麦克风有输入。" : "开始会议后，转写内容会实时显示在这里。所有语音识别均在本机完成。" }}</p>
     </div>
   </section>
 </template>

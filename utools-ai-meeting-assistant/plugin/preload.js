@@ -2,6 +2,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { NativeSystemAudioProcess } = require("./native-audio-process.cjs");
+const { LocalTranscriptionProcess } = require("./local-transcription-process.cjs");
 
 const lifecycleListeners = new Set();
 let lastEntryAction = null;
@@ -11,6 +12,13 @@ const nativeSystemAudio = new NativeSystemAudioProcess({
     typeof utools === "undefined"
       ? undefined
       : path.join(utools.getPath("userData"), "meeting-assistant", "native"),
+});
+const localTranscription = new LocalTranscriptionProcess({
+  runtimeDirectory: path.join(__dirname, "native", `${process.platform}-${process.arch}`),
+  modelDirectory:
+    typeof utools === "undefined"
+      ? path.join(os.tmpdir(), "meeting-assistant-models")
+      : path.join(utools.getPath("userData"), "meeting-assistant", "models"),
 });
 const recordingDirectoryName = "会议助手";
 const legacyRecordingDirectoryName = "铁虎AI会议助手";
@@ -48,12 +56,14 @@ if (typeof utools !== "undefined") {
     emitLifecycle({ type: "enter", at: Date.now(), action: lastEntryAction });
   });
   utools.onPluginOut((isKill) => {
+    localTranscription.stop();
     void nativeSystemAudio.stop().catch((error) => {
       console.error("stop native system audio after plugin exit failed", error);
     });
     emitLifecycle({ type: "out", at: Date.now(), isKill: Boolean(isKill) });
   });
   utools.onPluginDetach(() => {
+    localTranscription.stop();
     void nativeSystemAudio.stop().catch((error) => {
       console.error("stop native system audio after plugin detach failed", error);
     });
@@ -230,6 +240,63 @@ const writeRecordingIndex = async (recordings) => {
 
 const publicRecordingMetadata = ({ fileName: _fileName, ...metadata }) => metadata;
 
+const validateTranscript = (value) => {
+  if (!Array.isArray(value) || value.length > 100_000) {
+    throw new TypeError("Recording transcript is invalid");
+  }
+  return value.map((segment, index) => {
+    if (
+      !segment || typeof segment !== "object" ||
+      typeof segment.id !== "string" || segment.id.length > 100 ||
+      !Number.isSafeInteger(segment.sequenceNo) || segment.sequenceNo < 0 ||
+      !Number.isSafeInteger(segment.startOffsetMs) || segment.startOffsetMs < 0 ||
+      !Number.isSafeInteger(segment.endOffsetMs) || segment.endOffsetMs < segment.startOffsetMs ||
+      typeof segment.content !== "string" || segment.content.length > 20_000
+    ) {
+      throw new TypeError(`Recording transcript segment ${index} is invalid`);
+    }
+    return {
+      id: segment.id,
+      sequenceNo: segment.sequenceNo,
+      startOffsetMs: segment.startOffsetMs,
+      endOffsetMs: segment.endOffsetMs,
+      speakerLabel: typeof segment.speakerLabel === "string" ? segment.speakerLabel.slice(0, 100) : undefined,
+      content: segment.content,
+      isFinal: true,
+    };
+  });
+};
+
+const transcriptPath = (id) => path.join(recordingDirectory(), `${id}.transcript.json`);
+const summaryPath = (id) => path.join(recordingDirectory(), `${id}.summary.json`);
+
+const meetingSummarySchema = Object.freeze({
+  type: "object",
+  properties: {
+    topic: { type: "string" },
+    abstract: { type: "string" },
+    key_discussions: { type: "array", items: { type: "string" } },
+    decisions: { type: "array", items: { type: "string" } },
+    action_items: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          assignee: { type: "string" },
+          task: { type: "string" },
+          due_text: { type: "string" },
+          status: { type: "string", enum: ["pending"] },
+        },
+        required: ["assignee", "task", "due_text", "status"],
+      },
+    },
+    risks: { type: "array", items: { type: "string" } },
+  },
+  additionalProperties: false,
+  required: ["topic", "abstract", "key_discussions", "decisions", "action_items", "risks"],
+});
+
 const enqueueRecordingMutation = (operation) => {
   const result = recordingMutationQueue.then(operation, operation);
   recordingMutationQueue = result.catch(() => undefined);
@@ -296,6 +363,122 @@ window.meetingDesktop = Object.freeze({
     await nativeSystemAudio.stop();
   },
 
+  async getLocalTranscriptionStatus(input) {
+    requireUTools();
+    return localTranscription.status(input?.modelId);
+  },
+
+  async downloadLocalTranscriptionModel(input, onProgress) {
+    requireUTools();
+    if (onProgress !== undefined && typeof onProgress !== "function") {
+      throw new TypeError("Model download progress callback must be a function");
+    }
+    return localTranscription.downloadModel(input?.modelId, onProgress);
+  },
+
+  async startLocalTranscription(input) {
+    requireUTools();
+    await localTranscription.start(input?.modelId);
+  },
+
+  async transcribeLocalAudio(input) {
+    requireUTools();
+    return localTranscription.transcribe(input?.pcmData);
+  },
+
+  async stopLocalTranscription() {
+    localTranscription.stop();
+  },
+
+  async listOllamaModels(baseURL) {
+    requireUTools();
+    const origin = validateOllamaBaseURL(baseURL);
+    const response = await fetchJSON(`${origin}/api/tags`, { method: "GET" }, 10_000, "Ollama");
+    if (!Array.isArray(response?.models)) {
+      throw new Error("Ollama 模型列表响应格式无效");
+    }
+    return response.models
+      .map((model) => typeof model?.name === "string" ? model.name.trim() : "")
+      .filter(Boolean)
+      .slice(0, 200);
+  },
+
+  async chatOllama(input) {
+    requireUTools();
+    const origin = validateOllamaBaseURL(input?.baseURL);
+    const model = requireBoundedString(input?.model, "Ollama model", 200);
+    const systemPrompt = requireBoundedString(input?.systemPrompt, "Ollama system prompt", 20_000);
+    const userPrompt = requireBoundedString(input?.userPrompt, "Ollama user prompt", 400_000);
+    const response = await fetchJSON(`${origin}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        stream: false,
+        think: false,
+        format: meetingSummarySchema,
+        options: { temperature: 0, num_predict: 2_048 },
+        keep_alive: "10m",
+      }),
+    }, 5 * 60_000, "Ollama");
+    const content = response?.message?.content;
+    if (typeof content !== "string" || !content.trim()) {
+      throw new Error("Ollama 没有返回可用的会议总结");
+    }
+    return {
+      content,
+      inputTokens: Number.isSafeInteger(response.prompt_eval_count) ? response.prompt_eval_count : 0,
+      outputTokens: Number.isSafeInteger(response.eval_count) ? response.eval_count : 0,
+    };
+  },
+
+  async chatOpenAICompatible(input) {
+    requireUTools();
+    const provider = input?.provider === "openai" || input?.provider === "deepseek"
+      ? input.provider
+      : undefined;
+    if (!provider) throw new TypeError("AI 总结服务类型无效");
+    const serviceName = provider === "openai" ? "OpenAI" : "DeepSeek";
+    const baseURL = validateCompatibleBaseURL(input?.baseURL);
+    const apiKey = typeof input?.apiKey === "string" && input.apiKey.length <= 500
+      ? input.apiKey.trim()
+      : "";
+    const model = requireBoundedString(input?.model, "Compatible model", 200);
+    const systemPrompt = requireBoundedString(input?.systemPrompt, "Compatible system prompt", 20_000);
+    const userPrompt = requireBoundedString(input?.userPrompt, "Compatible user prompt", 400_000);
+    const response = await fetchJSON(`${baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        stream: false,
+        response_format: { type: "json_object" },
+        max_tokens: 2_048,
+        temperature: 0,
+      }),
+    }, 5 * 60_000, serviceName);
+    const content = response?.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) {
+      throw new Error(`${serviceName} 没有返回可用的会议总结`);
+    }
+    return {
+      content,
+      inputTokens: Number.isSafeInteger(response?.usage?.prompt_tokens) ? response.usage.prompt_tokens : 0,
+      outputTokens: Number.isSafeInteger(response?.usage?.completion_tokens) ? response.usage.completion_tokens : 0,
+    };
+  },
+
   async saveMarkdown({ suggestedName, content }) {
     if (typeof utools === "undefined") {
       throw new Error("uTools runtime is unavailable");
@@ -342,6 +525,7 @@ window.meetingDesktop = Object.freeze({
       sizeBytes: input.audioData.byteLength,
       fileName: `${input.id}.${extension}`,
     });
+    const transcript = validateTranscript(input.transcript);
     return enqueueRecordingMutation(async () => {
       const directory = await ensureRecordingDirectory();
       const recordings = await readRecordingIndex();
@@ -352,10 +536,14 @@ window.meetingDesktop = Object.freeze({
         throw new Error("本地录音数量已达 1000 条上限，请先删除旧录音");
       }
       const filePath = path.join(directory, metadata.fileName);
+      const meetingTranscriptPath = transcriptPath(metadata.id);
       let recordingFileCreated = false;
+      let transcriptFileCreated = false;
       try {
         await fs.writeFile(filePath, new Uint8Array(input.audioData), { flag: "wx" });
         recordingFileCreated = true;
+        await fs.writeFile(meetingTranscriptPath, JSON.stringify(transcript, null, 2), { encoding: "utf8", flag: "wx" });
+        transcriptFileCreated = true;
         await writeRecordingIndex([metadata, ...recordings]);
       } catch (error) {
         if (recordingFileCreated) {
@@ -366,6 +554,9 @@ window.meetingDesktop = Object.freeze({
               console.error("cleanup incomplete recording file failed", cleanupError);
             }
           }
+        }
+        if (transcriptFileCreated) {
+          await fs.unlink(meetingTranscriptPath).catch(() => undefined);
         }
         throw error;
       }
@@ -398,6 +589,50 @@ window.meetingDesktop = Object.freeze({
     return { mimeType: metadata.mimeType, audioData };
   },
 
+  async readRecordingTranscript(id) {
+    validateRecordingID(id, "Recording ID");
+    const recordings = await readRecordingIndex();
+    if (!recordings.some((recording) => recording.id === id)) {
+      throw new Error("本地录音不存在");
+    }
+    try {
+      const value = JSON.parse(await fs.readFile(transcriptPath(id), "utf8"));
+      return validateTranscript(value);
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    }
+  },
+
+  async readRecordingSummary(id) {
+    validateRecordingID(id, "Recording ID");
+    const recordings = await readRecordingIndex();
+    if (!recordings.some((recording) => recording.id === id)) {
+      throw new Error("本地录音不存在");
+    }
+    try {
+      return validateMeetingSummary(JSON.parse(await fs.readFile(summaryPath(id), "utf8")));
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+  },
+
+  async saveRecordingSummary(id, summary) {
+    validateRecordingID(id, "Recording ID");
+    const recordings = await readRecordingIndex();
+    if (!recordings.some((recording) => recording.id === id)) {
+      throw new Error("本地录音不存在");
+    }
+    const validated = validateMeetingSummary(summary);
+    await fs.writeFile(summaryPath(id), JSON.stringify(validated, null, 2), {
+      encoding: "utf8",
+      flag: "w",
+    });
+  },
+
   async deleteRecording(id) {
     validateRecordingID(id, "Recording ID");
     return enqueueRecordingMutation(async () => {
@@ -411,6 +646,14 @@ window.meetingDesktop = Object.freeze({
           throw error;
         }
       });
+      await fs.unlink(transcriptPath(id)).catch((error) => {
+        if (!error || error.code !== "ENOENT") {
+          throw error;
+        }
+      });
+      await fs.unlink(summaryPath(id)).catch((error) => {
+        if (!error || error.code !== "ENOENT") throw error;
+      });
       await writeRecordingIndex(recordings.filter((recording) => recording.id !== id));
     });
   },
@@ -421,3 +664,126 @@ window.meetingDesktop = Object.freeze({
     }
   },
 });
+
+function validateOllamaBaseURL(raw) {
+  let parsed;
+  try {
+    parsed = new URL(String(raw || "http://127.0.0.1:11434"));
+  } catch {
+    throw new TypeError("Ollama 地址无效");
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (
+    parsed.protocol !== "http:" || parsed.username || parsed.password ||
+    !new Set(["127.0.0.1", "localhost", "[::1]", "::1"]).has(hostname) ||
+    (parsed.pathname !== "/" && parsed.pathname !== "") || parsed.search || parsed.hash
+  ) {
+    throw new TypeError("Ollama 只允许使用本机 HTTP 地址");
+  }
+  return parsed.origin;
+}
+
+function validateCompatibleBaseURL(raw) {
+  let parsed;
+  try {
+    parsed = new URL(String(raw || ""));
+  } catch {
+    throw new TypeError("通用模型接口地址无效");
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  const localHost = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]).has(hostname);
+  if (
+    !new Set(["http:", "https:"]).has(parsed.protocol) || parsed.username || parsed.password ||
+    (parsed.protocol === "http:" && !localHost) || parsed.search || parsed.hash
+  ) {
+    throw new TypeError("通用模型接口须使用 HTTPS；本机地址可使用 HTTP");
+  }
+  const pathname = parsed.pathname.replace(/\/+$/, "");
+  return `${parsed.origin}${pathname}`;
+}
+
+async function fetchJSON(url, init, timeoutMs, serviceName) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const text = await response.text();
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const decoded = JSON.parse(text);
+        detail = typeof decoded?.error === "string" ? `：${decoded.error.slice(0, 500)}` : "";
+      } catch {
+        detail = "";
+      }
+      throw new Error(`${serviceName} 返回 HTTP ${response.status}${detail}`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`${serviceName} 返回的 JSON 无效`);
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`${serviceName} 请求超时`);
+    if (error instanceof TypeError) {
+      throw new Error(serviceName === "Ollama" ? "无法连接本机 Ollama，请确认 Ollama 已启动" : `无法连接${serviceName}，请检查地址和网络后重试`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function requireBoundedString(value, field, maximum) {
+  if (typeof value !== "string" || !value.trim() || value.length > maximum) {
+    throw new TypeError(`${field} is invalid`);
+  }
+  return value.trim();
+}
+
+function validateMeetingSummary(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Meeting summary is invalid");
+  const stringArray = (items, field) => {
+    if (!Array.isArray(items) || !items.every((item) => typeof item === "string" && item.length <= 20_000)) {
+      throw new TypeError(`Meeting summary ${field} is invalid`);
+    }
+    return items;
+  };
+  if (
+    typeof value.topic !== "string" || !value.topic.trim() || value.topic.length > 2_000 ||
+    typeof value.abstract !== "string" || !value.abstract.trim() || value.abstract.length > 20_000 ||
+    !Array.isArray(value.actionItems) || value.actionItems.length > 1_000 ||
+    typeof value.model !== "string" || !value.model.trim() ||
+    value.promptVersion !== "meeting-summary-v2-local" ||
+    typeof value.generatedAt !== "string" || Number.isNaN(Date.parse(value.generatedAt))
+  ) throw new TypeError("Meeting summary fields are invalid");
+  const actionItems = value.actionItems.map((item) => {
+    if (!item || typeof item !== "object" || typeof item.task !== "string" || !item.task.trim()) {
+      throw new TypeError("Meeting summary action item is invalid");
+    }
+    return {
+      assignee: typeof item.assignee === "string" ? item.assignee : "",
+      task: item.task,
+      dueText: typeof item.dueText === "string" ? item.dueText : "",
+      status: "pending",
+    };
+  });
+  return {
+    topic: value.topic,
+    abstract: value.abstract,
+    keyDiscussions: stringArray(value.keyDiscussions, "keyDiscussions"),
+    decisions: stringArray(value.decisions, "decisions"),
+    actionItems,
+    risks: stringArray(value.risks, "risks"),
+    provider: value.provider === "openai" || value.provider === "deepseek"
+      ? value.provider
+      : value.provider === "openai-compatible"
+        ? "deepseek"
+        : "ollama",
+    model: value.model,
+    promptVersion: value.promptVersion,
+    generatedAt: new Date(value.generatedAt).toISOString(),
+    inputTokens: Number.isSafeInteger(value.inputTokens) && value.inputTokens >= 0 ? value.inputTokens : 0,
+    outputTokens: Number.isSafeInteger(value.outputTokens) && value.outputTokens >= 0 ? value.outputTokens : 0,
+  };
+}

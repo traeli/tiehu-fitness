@@ -12,9 +12,13 @@ export interface DesktopRecordingBridge {
     durationMs: number;
     mimeType: string;
     audioData: ArrayBuffer;
+    transcript: SaveLocalMeetingRecording["transcript"];
   }): Promise<void>;
   listRecordings(): Promise<LocalMeetingRecording[]>;
   readRecording(id: string): Promise<{ mimeType: string; audioData: ArrayBuffer }>;
+  readRecordingTranscript(id: string): Promise<SaveLocalMeetingRecording["transcript"]>;
+  readRecordingSummary(id: string): Promise<import("@/domain/meeting").LocalMeetingSummary | null>;
+  saveRecordingSummary(id: string, summary: import("@/domain/meeting").LocalMeetingSummary): Promise<void>;
   deleteRecording(id: string): Promise<void>;
 }
 
@@ -30,6 +34,7 @@ export class DesktopFileRecordingRepository implements RecordingRepository {
       durationMs: recording.durationMs,
       mimeType: recording.mimeType,
       audioData,
+      transcript: recording.transcript,
     });
   }
 
@@ -40,6 +45,18 @@ export class DesktopFileRecordingRepository implements RecordingRepository {
   async loadAudio(id: string): Promise<Blob> {
     const recording = await this.bridge.readRecording(id);
     return new Blob([recording.audioData], { type: recording.mimeType });
+  }
+
+  async loadTranscript(id: string): Promise<SaveLocalMeetingRecording["transcript"]> {
+    return this.bridge.readRecordingTranscript(id);
+  }
+
+  async loadSummary(id: string): Promise<import("@/domain/meeting").LocalMeetingSummary | undefined> {
+    return (await this.bridge.readRecordingSummary(id)) ?? undefined;
+  }
+
+  async saveSummary(id: string, summary: import("@/domain/meeting").LocalMeetingSummary): Promise<void> {
+    await this.bridge.saveRecordingSummary(id, summary);
   }
 
   async delete(id: string): Promise<void> {

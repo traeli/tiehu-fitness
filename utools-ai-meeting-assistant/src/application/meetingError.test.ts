@@ -2,33 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/infrastructure/api/apiClient";
 import { AudioCaptureError } from "@/infrastructure/audio/microphoneRecorder";
-import { RealtimeTranscriptionError } from "@/infrastructure/realtime/transcriptionClient";
 
 import { toMeetingError } from "./meetingError";
 
 describe("meeting error mapping", () => {
-  it("maps quota errors to a stable non-retryable message", () => {
-    const result = toMeetingError(
-      new ApiError("provider detail", 429, "MEETING_QUOTA_EXCEEDED"),
-      "start",
-    );
-
-    expect(result.code).toBe("MEETING_QUOTA_EXCEEDED");
-    expect(result.retryable).toBe(false);
-    expect(result.message).not.toContain("provider detail");
-  });
-
-  it("maps an active meeting conflict without degrading to unknown error", () => {
-    const result = toMeetingError(
-      new ApiError("too many active meetings", 429, "MEETING_CONCURRENT_LIMIT_REACHED"),
-      "start",
-    );
-
-    expect(result.code).toBe("MEETING_CONCURRENT_LIMIT_REACHED");
-    expect(result.title).toBe("已有会议尚未结束");
-    expect(result.retryable).toBe(true);
-  });
-
   it("explains missing uTools server authentication without exposing backend details", () => {
     const result = toMeetingError(
       new ApiError(
@@ -67,19 +44,15 @@ describe("meeting error mapping", () => {
     expect(result.failedAction).toBe("start");
   });
 
-  it("keeps realtime session preparation timeout distinct from unknown failures", () => {
+  it("reports invalid local PCM settings without an unknown error code", () => {
     const result = toMeetingError(
-      new RealtimeTranscriptionError(
-        "TRANSCRIPTION_SESSION_READY_TIMEOUT",
-        "实时转写服务在 45 秒内未完成会话准备，请稍后重试。",
-        true,
-      ),
+      new Error("实时音频参数必须为 16kHz 单声道 PCM16LE，分片长度为 100-200ms"),
       "start",
     );
 
-    expect(result.code).toBe("TRANSCRIPTION_SESSION_READY_TIMEOUT");
-    expect(result.title).toBe("实时转写准备超时");
-    expect(result.retryable).toBe(true);
-    expect(result.failedAction).toBe("start");
+    expect(result.code).toBe("LOCAL_AUDIO_CONFIGURATION_INVALID");
+    expect(result.title).toBe("本地音频配置无效");
+    expect(result.retryable).toBe(false);
   });
+
 });

@@ -30,7 +30,7 @@ function submit(): void {
     <div>
       <p class="eyebrow">浏览器本地联调</p>
       <h2 id="web-auth-title">{{ mode === "register" ? "创建测试账号" : "登录测试账号" }}</h2>
-      <p class="auth-description">登录后页面会自动创建会议、连接本地 WebSocket 并采集麦克风 PCM。</p>
+      <p class="auth-description">登录仅用于账号识别。会议录音与转写始终在本机完成，不会上传。</p>
     </div>
 
     <div class="auth-mode-tabs" role="tablist" aria-label="认证方式">
